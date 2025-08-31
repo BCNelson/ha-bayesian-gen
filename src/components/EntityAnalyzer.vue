@@ -310,16 +310,18 @@ const pendingEntityStatusMap = computed(() => {
   return new Map(incomplete)
 })
 
-watch(() => props.analyzedEntities, (newEntities) => {
-  if (newEntities.length > 0 && selectedEntities.value.length === 0) {
-    const topEntities = newEntities
+watch(() => props.isAnalyzing, (isAnalyzing, wasAnalyzing) => {
+  // Only auto-select when analysis completes (goes from true to false)
+  // and only if user hasn't manually selected any entities
+  if (wasAnalyzing && !isAnalyzing && selectedEntities.value.length === 0 && props.analyzedEntities.length > 0) {
+    const topEntities = props.analyzedEntities
       .sort((a, b) => b.discriminationPower - a.discriminationPower)
       .slice(0, 10)
     
     selectedEntities.value = topEntities
     emit('entitiesSelected', selectedEntities.value)
   }
-}, { immediate: true })
+})
 
 
 const toggleEntitySelection = (entity: EntityProbability) => {
