@@ -12,8 +12,10 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@types/prismjs": "^1.26.5",
     "axios": "^1.11.0",
     "date-fns": "^4.1.0",
+    "prismjs": "^1.30.0",
     "vue": "^3.5.18",
     "yaml": "^2.8.1"
   },

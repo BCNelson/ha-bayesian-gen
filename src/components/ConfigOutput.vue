@@ -1,59 +1,36 @@
 <template>
   <div class="config-output">
     <h2>Generated Configuration</h2>
-    
+
     <div v-if="!config" class="no-config">
       <p>No configuration generated yet. Complete the analysis first.</p>
     </div>
-    
+
     <div v-else>
       <div class="config-header">
         <div class="config-settings">
           <div class="setting-group">
             <label for="sensor-name">Sensor Name:</label>
-            <input
-              id="sensor-name"
-              v-model="sensorName"
-              type="text"
-              @input="updateConfig"
-            />
+            <input id="sensor-name" v-model="sensorName" type="text" @input="updateConfig" />
           </div>
-          
+
           <div class="setting-group">
             <label for="prior">Prior Probability:</label>
-            <input
-              id="prior"
-              v-model.number="prior"
-              type="number"
-              min="0.01"
-              max="0.99"
-              step="0.01"
-              @input="updateConfig"
-            />
+            <input id="prior" v-model.number="prior" type="number" min="0.01" max="0.99" step="0.01"
+              @input="updateConfig" />
             <small>Initial probability (0.01-0.99)</small>
           </div>
-          
+
           <div class="setting-group">
             <label for="threshold">Probability Threshold:</label>
-            <input
-              id="threshold"
-              v-model.number="threshold"
-              type="number"
-              min="0.01"
-              max="0.99"
-              step="0.01"
-              @input="updateConfig"
-            />
+            <input id="threshold" v-model.number="threshold" type="number" min="0.01" max="0.99" step="0.01"
+              @input="updateConfig" />
             <small>Activation threshold (0.01-0.99)</small>
           </div>
-          
+
           <div class="setting-group">
             <label for="max-observations">Max Observations:</label>
-            <select
-              id="max-observations"
-              v-model.number="maxObservations"
-              @change="updateConfig"
-            >
+            <select id="max-observations" v-model.number="maxObservations" @change="updateConfig">
               <option value="5">Top 5</option>
               <option value="10">Top 10</option>
               <option value="15">Top 15</option>
@@ -61,7 +38,7 @@
             </select>
           </div>
         </div>
-        
+
         <div class="actions">
           <button @click="copyToClipboard" class="copy-btn">
             {{ copyText }}
@@ -71,7 +48,7 @@
           </button>
         </div>
       </div>
-      
+
       <div class="config-preview">
         <h3>Configuration Preview</h3>
         <div class="config-stats">
@@ -79,19 +56,15 @@
           <span>Discrimination range: {{ discriminationRange }}</span>
         </div>
       </div>
-      
+
       <div class="yaml-output">
-        <pre><code>{{ yamlOutput }}</code></pre>
+        <pre><code class="language-yaml" v-html="highlightedYaml"></code></pre>
       </div>
-      
+
       <div class="observations-details">
         <h3>Observation Details</h3>
         <div class="observation-cards">
-          <div
-            v-for="(obs, index) in currentConfig?.observations || []"
-            :key="index"
-            class="observation-card"
-          >
+          <div v-for="(obs, index) in currentConfig?.observations || []" :key="index" class="observation-card">
             <div class="obs-header">
               <span class="obs-entity">{{ obs.entity_id }}</span>
               <span class="obs-platform">{{ obs.platform }}</span>
@@ -106,19 +79,13 @@
               <div class="prob-item">
                 <span>True: {{ (obs.prob_given_true * 100).toFixed(1) }}%</span>
                 <div class="prob-bar">
-                  <div 
-                    class="prob-fill true-fill"
-                    :style="{ width: `${obs.prob_given_true * 100}%` }"
-                  ></div>
+                  <div class="prob-fill true-fill" :style="{ width: `${obs.prob_given_true * 100}%` }"></div>
                 </div>
               </div>
               <div class="prob-item">
                 <span>False: {{ (obs.prob_given_false * 100).toFixed(1) }}%</span>
                 <div class="prob-bar">
-                  <div 
-                    class="prob-fill false-fill"
-                    :style="{ width: `${obs.prob_given_false * 100}%` }"
-                  ></div>
+                  <div class="prob-fill false-fill" :style="{ width: `${obs.prob_given_false * 100}%` }"></div>
                 </div>
               </div>
             </div>
@@ -130,8 +97,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { stringify as yamlStringify } from 'yaml'
+import Prism from 'prismjs'
+import 'prismjs/components/prism-yaml'
+import 'prismjs/themes/prism-tomorrow.css'
 import type { BayesianSensorConfig, EntityProbability } from '../types/bayesian'
 
 const props = defineProps<{
@@ -151,7 +121,7 @@ const copyText = ref('Copy YAML')
 
 const currentConfig = computed(() => {
   if (!props.config) return null
-  
+
   return {
     ...props.config,
     name: sensorName.value,
@@ -163,18 +133,51 @@ const currentConfig = computed(() => {
 
 const yamlOutput = computed(() => {
   if (!currentConfig.value) return ''
-  
+
+  // Create a clean config object for YAML output
+  const cleanConfig = {
+    platform: currentConfig.value.platform,
+    name: currentConfig.value.name,
+    unique_id: currentConfig.value.unique_id,
+    prior: currentConfig.value.prior,
+    probability_threshold: currentConfig.value.probability_threshold,
+    observations: currentConfig.value.observations.map(obs => {
+      const cleanObs: any = {
+        platform: obs.platform,
+        entity_id: obs.entity_id,
+        prob_given_true: obs.prob_given_true,
+        prob_given_false: obs.prob_given_false
+      }
+
+      // Only add optional fields if they exist
+      if (obs.to_state) cleanObs.to_state = obs.to_state
+      if (obs.above !== undefined) cleanObs.above = obs.above
+      if (obs.below !== undefined) cleanObs.below = obs.below
+      if (obs.value_template) cleanObs.value_template = obs.value_template
+
+      return cleanObs
+    })
+  }
+
   return yamlStringify({
-    binary_sensor: [currentConfig.value]
+    binary_sensor: [cleanConfig]
   }, {
     indent: 2,
-    lineWidth: 0
+    lineWidth: 80,
+    quotingType: '"',
+    forceQuotes: false,
+    sortKeys: false
   })
+})
+
+const highlightedYaml = computed(() => {
+  if (!yamlOutput.value) return ''
+  return Prism.highlight(yamlOutput.value, Prism.languages.yaml, 'yaml')
 })
 
 const discriminationRange = computed(() => {
   if (!props.entityProbabilities || props.entityProbabilities.length === 0) return 'N/A'
-  
+
   const topEntities = props.entityProbabilities.slice(0, maxObservations.value)
   const min = Math.min(...topEntities.map(e => e.discriminationPower))
   const max = Math.max(...topEntities.map(e => e.discriminationPower))
@@ -337,20 +340,32 @@ h2 {
 }
 
 .yaml-output {
-  background: #f8f8f8;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
   margin-bottom: 2rem;
-  overflow-x: auto;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #3c3c3c;
 }
 
 .yaml-output pre {
-  margin: 0;
-  padding: 1rem;
+  margin: 0 !important;
+  padding: 1rem !important;
   white-space: pre;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.85rem;
-  line-height: 1.4;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: left;
+  max-height: 600px;
+  overflow: auto;
+  background: #2d2d2d !important;
+}
+
+.yaml-output code {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0;
+  text-align: left;
+  display: block;
+  font-family: inherit;
 }
 
 .observations-details h3 {

@@ -18,30 +18,94 @@ export class BayesianCalculator {
     for (const [entityId, entityHistory] of Object.entries(history)) {
       const numericStats = analyzeNumericStates(entityHistory, periods)
       
-      const stateAnalysis = this.analyzeEntityStates(
-        entityHistory,
-        truePeriods,
-        falsePeriods
-      )
-
-      for (const [state, analysis] of Object.entries(stateAnalysis)) {
-        const probGivenTrue = analysis.trueOccurrences / truePeriods.length
-        const probGivenFalse = analysis.falseOccurrences / falsePeriods.length
+      // Check if this entity has numeric values
+      if (numericStats.isNumeric && numericStats.trueChunks && numericStats.falseChunks) {
+        // For numeric entities, calculate optimal thresholds and create a single entry
+        const optimalThresholds = findOptimalNumericThresholds(numericStats)
         
+        // Calculate probabilities based on optimal thresholds
+        const trueMatches = numericStats.trueChunks.filter(chunk => {
+          if (optimalThresholds.above !== undefined && optimalThresholds.below !== undefined) {
+            return chunk.value > optimalThresholds.above && chunk.value <= optimalThresholds.below
+          } else if (optimalThresholds.above !== undefined) {
+            return chunk.value > optimalThresholds.above
+          } else if (optimalThresholds.below !== undefined) {
+            return chunk.value <= optimalThresholds.below
+          }
+          return false
+        })
+        
+        const falseMatches = numericStats.falseChunks.filter(chunk => {
+          if (optimalThresholds.above !== undefined && optimalThresholds.below !== undefined) {
+            return chunk.value > optimalThresholds.above && chunk.value <= optimalThresholds.below
+          } else if (optimalThresholds.above !== undefined) {
+            return chunk.value > optimalThresholds.above
+          } else if (optimalThresholds.below !== undefined) {
+            return chunk.value <= optimalThresholds.below
+          }
+          return false
+        })
+        
+        // Calculate time-weighted probabilities
+        const trueTotalTime = numericStats.trueChunks.reduce((sum, c) => sum + c.duration, 0)
+        const falseTotalTime = numericStats.falseChunks.reduce((sum, c) => sum + c.duration, 0)
+        const trueMatchTime = trueMatches.reduce((sum, c) => sum + c.duration, 0)
+        const falseMatchTime = falseMatches.reduce((sum, c) => sum + c.duration, 0)
+        
+        const probGivenTrue = trueTotalTime > 0 ? trueMatchTime / trueTotalTime : 0
+        const probGivenFalse = falseTotalTime > 0 ? falseMatchTime / falseTotalTime : 0
         const discriminationPower = Math.abs(probGivenTrue - probGivenFalse)
-
+        
+        // Create a descriptive state string for numeric ranges
+        let stateDesc = 'numeric'
+        if (optimalThresholds.above !== undefined && optimalThresholds.below !== undefined) {
+          stateDesc = `${optimalThresholds.above} < value <= ${optimalThresholds.below}`
+        } else if (optimalThresholds.above !== undefined) {
+          stateDesc = `> ${optimalThresholds.above}`
+        } else if (optimalThresholds.below !== undefined) {
+          stateDesc = `<= ${optimalThresholds.below}`
+        }
+        
         results.push({
           entityId,
-          state,
+          state: stateDesc,
           probGivenTrue: Math.min(0.99, Math.max(0.01, probGivenTrue)),
           probGivenFalse: Math.min(0.99, Math.max(0.01, probGivenFalse)),
           discriminationPower,
-          trueOccurrences: analysis.trueOccurrences,
-          falseOccurrences: analysis.falseOccurrences,
+          trueOccurrences: truePeriods.length,
+          falseOccurrences: falsePeriods.length,
           totalTruePeriods: truePeriods.length,
           totalFalsePeriods: falsePeriods.length,
-          numericStats // Store for later use in config generation
+          numericStats,
+          optimalThresholds
         })
+      } else {
+        // For non-numeric entities, use state-based analysis
+        const stateAnalysis = this.analyzeEntityStates(
+          entityHistory,
+          truePeriods,
+          falsePeriods
+        )
+
+        for (const [state, analysis] of Object.entries(stateAnalysis)) {
+          const probGivenTrue = analysis.trueOccurrences / truePeriods.length
+          const probGivenFalse = analysis.falseOccurrences / falsePeriods.length
+          
+          const discriminationPower = Math.abs(probGivenTrue - probGivenFalse)
+
+          results.push({
+            entityId,
+            state,
+            probGivenTrue: Math.min(0.99, Math.max(0.01, probGivenTrue)),
+            probGivenFalse: Math.min(0.99, Math.max(0.01, probGivenFalse)),
+            discriminationPower,
+            trueOccurrences: analysis.trueOccurrences,
+            falseOccurrences: analysis.falseOccurrences,
+            totalTruePeriods: truePeriods.length,
+            totalFalsePeriods: falsePeriods.length,
+            numericStats: { isNumeric: false }
+          })
+        }
       }
     }
 
@@ -122,13 +186,8 @@ export class BayesianCalculator {
     const topEntities = entityProbabilities.slice(0, maxObservations)
     
     const observations: BayesianObservation[] = topEntities.map(ep => {
-      const isNumeric = !isNaN(parseFloat(ep.state))
-      
-      if (isNumeric && ep.numericStats?.isNumeric) {
-        const stats = ep.numericStats
-        
-        const optimalThresholds = ep.optimalThresholds || findOptimalNumericThresholds(stats)
-        
+      // Check if this entity has numeric stats and optimal thresholds
+      if (ep.numericStats?.isNumeric && ep.optimalThresholds) {
         const observation: BayesianObservation = {
           entity_id: ep.entityId,
           platform: 'numeric_state',
@@ -136,11 +195,17 @@ export class BayesianCalculator {
           prob_given_false: ep.probGivenFalse
         }
         
-        if (optimalThresholds.above !== undefined) observation.above = optimalThresholds.above
-        if (optimalThresholds.below !== undefined) observation.below = optimalThresholds.below
+        // Add the threshold values
+        if (ep.optimalThresholds.above !== undefined) {
+          observation.above = Math.round(ep.optimalThresholds.above * 100) / 100 // Round to 2 decimal places
+        }
+        if (ep.optimalThresholds.below !== undefined) {
+          observation.below = Math.round(ep.optimalThresholds.below * 100) / 100 // Round to 2 decimal places
+        }
         
         return observation
       } else {
+        // Non-numeric entity - use state platform
         return {
           entity_id: ep.entityId,
           platform: 'state',
