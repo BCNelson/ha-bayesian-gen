@@ -71,6 +71,7 @@ export const useBayesianAnalysis = () => {
     isAnalyzing.value = true
     analysisError.value = null
     entityStatusMap.value.clear()
+    analyzedEntities.value = [] // Clear previous results
     
     // Set up progress callback for worker pool
     workerPool.setProgressCallback((entityId: string, status: string, message?: string) => {
@@ -102,7 +103,6 @@ export const useBayesianAnalysis = () => {
           .map(entity => entity.entity_id)
       }
       
-      const allProbabilities: EntityProbability[] = []
       analysisProgress.value = { current: 0, total: relevantEntityIds.length, currentEntity: '' }
       
       // Initialize all entities as queued
@@ -193,7 +193,10 @@ export const useBayesianAnalysis = () => {
             const entityProbabilities = await workerPool.analyzeEntity(history, periods)
             
             if (Array.isArray(entityProbabilities)) {
-              allProbabilities.push(...entityProbabilities)
+              // Add results immediately to displayed results
+              analyzedEntities.value.push(...entityProbabilities)
+              // Sort by discrimination power to maintain order
+              analyzedEntities.value.sort((a, b) => b.discriminationPower - a.discriminationPower)
             }
             
             completedCount++
@@ -241,12 +244,10 @@ export const useBayesianAnalysis = () => {
         processFetchQueue()
       })
       
-      const sortedProbabilities = allProbabilities.sort((a, b) => b.discriminationPower - a.discriminationPower)
-      analyzedEntities.value = sortedProbabilities
-      
-      if (sortedProbabilities.length > 0) {
+      // Generate final config after all entities are analyzed
+      if (analyzedEntities.value.length > 0) {
         const config = calculator.generateBayesianConfig(
-          sortedProbabilities,
+          analyzedEntities.value.slice(0, 10), // Take top 10 for default config
           'Bayesian Sensor',
           10
         )

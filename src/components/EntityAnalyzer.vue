@@ -22,16 +22,52 @@
         </p>
       </div>
       
-      <!-- Entity Status Cards during analysis -->
-      <div v-if="entityStatusMap.size > 0" class="entity-cards">
+      <!-- Show completed results immediately during analysis -->
+      <div v-if="analyzedEntities.length > 0" class="analysis-summary">
+        <p>Found <strong>{{ analyzedEntities.length }}</strong> state combinations from <strong>{{ analysisProgress.current }}</strong> completed entities</p>
+        <p><em>Results appear as entities are analyzed. Analysis continues in the background...</em></p>
+      </div>
+      
+      <!-- Filter controls available during analysis -->
+      <div v-if="analyzedEntities.length > 0" class="filter-controls">
+        <input
+          v-model="searchFilter"
+          type="text"
+          placeholder="Filter entities..."
+          class="search-input"
+        />
+        <select v-model="minDiscrimination" class="discrimination-filter">
+          <option value="0">All discrimination levels</option>
+          <option value="0.1">Min 10% difference</option>
+          <option value="0.3">Min 30% difference</option>
+          <option value="0.5">Min 50% difference</option>
+          <option value="0.7">Min 70% difference</option>
+        </select>
+      </div>
+      
+      <!-- Show analyzed entities as they come in -->
+      <div v-if="filteredEntities.length > 0" class="entity-cards">
         <EntityCard
-          v-for="[entityId, status] in sortedEntityStatusMap" 
-          :key="entityId"
-          :group="getEntityGroupForAnalysis(entityId)"
-          :entity-status="status"
+          v-for="group in filteredEntities"
+          :key="group.entityId"
+          :group="group"
           :selected-entities="selectedEntities"
           @toggle-selection="toggleEntitySelection"
         />
+      </div>
+      
+      <!-- Show status cards for entities not yet analyzed -->
+      <div v-if="pendingEntityStatusMap.size > 0" class="pending-entities">
+        <h3>Processing Queue</h3>
+        <div class="entity-status-grid">
+          <div v-for="[entityId, status] in pendingEntityStatusMap" 
+               :key="entityId"
+               class="entity-status-item"
+               :class="status.status">
+            <span class="entity-id">{{ entityId }}</span>
+            <span class="entity-status">{{ status.status }}</span>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -246,38 +282,23 @@ const filteredEntities = computed(() => {
   }).sort((a, b) => b.bestDiscrimination - a.bestDiscrimination)
 })
 
-// Sort entity status map: completed entities by discrimination, incomplete by processing order
-const sortedEntityStatusMap = computed(() => {
+// Separate pending entities that haven't been analyzed yet
+const pendingEntityStatusMap = computed(() => {
   const entries = Array.from(props.entityStatusMap.entries())
-  
-  // Separate completed and incomplete entities
-  const completed: Array<[string, any]> = []
   const incomplete: Array<[string, any]> = []
   
   entries.forEach(([entityId, status]) => {
-    if (status.status === 'completed') {
-      completed.push([entityId, status])
-    } else {
+    if (status.status !== 'completed' && status.status !== 'error') {
       incomplete.push([entityId, status])
     }
   })
   
-  // Sort completed by discrimination power (best first)
-  completed.sort((a, b) => {
-    const groupA = groupedEntities.value.find(g => g.entityId === a[0])
-    const groupB = groupedEntities.value.find(g => g.entityId === b[0])
-    const discrimA = groupA?.bestDiscrimination || 0
-    const discrimB = groupB?.bestDiscrimination || 0
-    return discrimB - discrimA
-  })
-  
-  // Sort incomplete by status priority (processing order)
+  // Sort by status priority (processing order)
   const statusPriority: Record<string, number> = {
     'analyzing': 1,
     'fetched': 2,
     'fetching': 3,
-    'queued': 4,
-    'error': 5
+    'queued': 4
   }
   
   incomplete.sort((a, b) => {
@@ -286,8 +307,7 @@ const sortedEntityStatusMap = computed(() => {
     return priorityA - priorityB
   })
   
-  // Combine: completed first (sorted by discrimination), then incomplete (sorted by status)
-  return [...completed, ...incomplete]
+  return new Map(incomplete)
 })
 
 watch(() => props.analyzedEntities, (newEntities) => {
@@ -341,24 +361,6 @@ const generateConfig = () => {
   emit('entitiesSelected', selectedEntities.value)
 }
 
-// Helper to create entity group for analysis display
-const getEntityGroupForAnalysis = (entityId: string) => {
-  // Check if we already have analysis results for this entity
-  const existingGroup = groupedEntities.value.find(g => g.entityId === entityId)
-  if (existingGroup) {
-    return existingGroup
-  }
-  
-  // Create a placeholder group for entities being analyzed
-  return {
-    entityId,
-    states: [],
-    bestDiscrimination: 0,
-    isNumeric: false,
-    numericThresholds: undefined,
-    correctedProbabilities: undefined
-  }
-}
 </script>
 
 <style scoped>
@@ -574,6 +576,78 @@ h2 {
   background: #45a049;
 }
 
+/* Pending entities section */
+.pending-entities {
+  margin-top: 2rem;
+  padding: 1rem;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.pending-entities h3 {
+  margin: 0 0 1rem 0;
+  color: #666;
+  font-size: 1rem;
+}
+
+.entity-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.entity-status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 4px;
+  border-left: 3px solid #ddd;
+  font-size: 0.85rem;
+}
+
+.entity-status-item.analyzing {
+  border-left-color: #4CAF50;
+  background: #f1f8e9;
+}
+
+.entity-status-item.fetching {
+  border-left-color: #2196F3;
+  background: #e3f2fd;
+}
+
+.entity-status-item.fetched {
+  border-left-color: #FFC107;
+  background: #fff8e1;
+}
+
+.entity-status-item.queued {
+  border-left-color: #9E9E9E;
+}
+
+.entity-status-item .entity-id {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.entity-status-item .entity-status {
+  font-size: 0.75rem;
+  color: #666;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  background: rgba(0,0,0,0.05);
+  border-radius: 3px;
+  margin-left: 0.5rem;
+}
+
 @media (max-width: 768px) {
   .selection-actions {
     justify-content: center;
@@ -582,6 +656,10 @@ h2 {
   .select-btn {
     font-size: 0.85rem;
     padding: 0.4rem 0.8rem;
+  }
+  
+  .entity-status-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
