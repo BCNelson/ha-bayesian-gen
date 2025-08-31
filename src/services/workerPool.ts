@@ -14,6 +14,7 @@ export class WorkerPool {
   private activeTasks = new Map<string, WorkerTask>()
   private nextTaskId = 0
   private progressCallback?: (entityId: string, status: string, message?: string) => void
+  private wasmInitPromises = new Map<Worker, Promise<void>>()
 
   constructor(workerCount: number = 8) {
     const actualWorkerCount = Math.max(2, Math.min(workerCount, 8))
@@ -21,12 +22,38 @@ export class WorkerPool {
     
     for (let i = 0; i < actualWorkerCount; i++) {
       const worker = new AnalysisWorker()
-      worker.onmessage = this.handleWorkerMessage.bind(this)
-      worker.onerror = this.handleWorkerError.bind(this)
-      
+      this.initializeWorker(worker)
       this.workers.push(worker)
-      this.availableWorkers.push(worker)
     }
+  }
+
+  private async initializeWorker(worker: Worker) {
+    const initPromise = new Promise<void>((resolve, reject) => {
+      const initId = `init_${Date.now()}_${Math.random()}`
+      
+      const messageHandler = (e: MessageEvent) => {
+        if (e.data.type === 'WASM_INITIALIZED' && e.data.id === initId) {
+          worker.removeEventListener('message', messageHandler)
+          worker.onmessage = this.handleWorkerMessage.bind(this)
+          worker.onerror = this.handleWorkerError.bind(this)
+          this.availableWorkers.push(worker)
+          resolve()
+        } else if (e.data.type === 'ANALYSIS_ERROR' && e.data.id === initId) {
+          worker.removeEventListener('message', messageHandler)
+          reject(new Error(e.data.error))
+        }
+      }
+      
+      worker.addEventListener('message', messageHandler)
+      
+      worker.postMessage({
+        type: 'INIT_WASM',
+        id: initId
+      })
+    })
+    
+    this.wasmInitPromises.set(worker, initPromise)
+    await initPromise
   }
 
   private handleWorkerMessage(e: MessageEvent) {
@@ -55,26 +82,24 @@ export class WorkerPool {
     this.processNextTask()
   }
 
-  private handleWorkerError(error: ErrorEvent) {
+  private async handleWorkerError(error: ErrorEvent) {
     console.error('Worker error:', error)
     const worker = error.target as Worker
-    
     
     const workerIndex = this.workers.indexOf(worker)
     if (workerIndex !== -1) {
       worker.terminate()
+      this.wasmInitPromises.delete(worker)
       
       const newWorker = new AnalysisWorker()
-      newWorker.onmessage = this.handleWorkerMessage.bind(this)
-      newWorker.onerror = this.handleWorkerError.bind(this)
-      
       this.workers[workerIndex] = newWorker
       
       const availableIndex = this.availableWorkers.indexOf(worker)
       if (availableIndex !== -1) {
-        this.availableWorkers[availableIndex] = newWorker
+        this.availableWorkers.splice(availableIndex, 1)
       }
       
+      await this.initializeWorker(newWorker)
       console.log('Worker recovered after error')
     }
   }
@@ -97,6 +122,11 @@ export class WorkerPool {
   }
 
   async analyzeEntity(entityHistory: any, periods: any): Promise<any> {
+    // Wait for at least one worker to be initialized
+    if (this.availableWorkers.length === 0) {
+      await Promise.race(Array.from(this.wasmInitPromises.values()))
+    }
+    
     const startTime = performance.now()
     
     return new Promise((resolve, reject) => {

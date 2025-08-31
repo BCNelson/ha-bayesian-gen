@@ -1,0 +1,43 @@
+[package]
+name = "bayesian-calculator"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.6"
+tsify = "0.4"
+js-sys = "0.3"
+web-sys = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
+
+# For performance optimizations
+rayon = "1.10"
+rayon-core = "1.12"
+
+# For faster hashing
+rustc-hash = "2.0"
+
+# Console logging for debugging
+console_error_panic_hook = "0.1"
+
+[dependencies.wasm-bindgen-rayon]
+version = "1.2"
+optional = true
+
+[features]
+default = []
+parallel = ["wasm-bindgen-rayon"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }

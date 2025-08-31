@@ -7,6 +7,14 @@ export default defineConfig({
   worker: {
     format: 'es'
   },
+  optimizeDeps: {
+    exclude: ['bayesian_calculator_bg.wasm']
+  },
+  server: {
+    fs: {
+      allow: ['..']
+    }
+  },
   test: {
     environment: 'jsdom',
     globals: true,

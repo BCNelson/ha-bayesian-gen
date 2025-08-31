@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 
 .direnv/
+
+# WASM build artifacts
+src/wasm/pkg/
+src/wasm/bayesian_calculator/target/
+src/wasm/bayesian_calculator/Cargo.lock

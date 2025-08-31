@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
+    "build": "npm run build:wasm && vue-tsc -b && vite build",
+    "build:wasm": "cd src/wasm/bayesian_calculator && wasm-pack build --target web --out-dir ../pkg",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui"
