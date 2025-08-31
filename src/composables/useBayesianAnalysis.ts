@@ -19,6 +19,7 @@ export const useBayesianAnalysis = () => {
   const isAnalyzing = ref(false)
   const analysisError = ref<string | null>(null)
   const analysisProgress = ref({ current: 0, total: 0, currentEntity: '' })
+  const entityStatusMap = ref<Map<string, { status: 'queued' | 'fetching' | 'fetched' | 'analyzing' | 'completed' | 'error', message?: string }>>(new Map())
   
   const calculator = new BayesianCalculator()
   const workerPool = new WorkerPool()
@@ -69,6 +70,16 @@ export const useBayesianAnalysis = () => {
     
     isAnalyzing.value = true
     analysisError.value = null
+    entityStatusMap.value.clear()
+    
+    // Set up progress callback for worker pool
+    workerPool.setProgressCallback((entityId: string, status: string, message?: string) => {
+      if (status === 'analyzing') {
+        entityStatusMap.value.set(entityId, { status: 'analyzing', message })
+      } else if (status === 'completed') {
+        entityStatusMap.value.set(entityId, { status: 'completed', message })
+      }
+    })
     
     try {
       const allPeriods = [...periods.value]
@@ -94,14 +105,40 @@ export const useBayesianAnalysis = () => {
       const allProbabilities: EntityProbability[] = []
       analysisProgress.value = { current: 0, total: relevantEntityIds.length, currentEntity: '' }
       
-      const entityQueue = [...relevantEntityIds]
+      // Initialize all entities as queued
+      relevantEntityIds.forEach(entityId => {
+        entityStatusMap.value.set(entityId, { status: 'queued' })
+      })
+      
+      const fetchQueue = [...relevantEntityIds]
+      const analysisQueue: { entityId: string; history: any; periods: any }[] = []
       const maxConcurrentFetches = 2
       let activeFetches = 0
+      let activeAnalyses = 0
       let completedCount = 0
+      let fetchedCount = 0
+      
+      const serializedPeriods = periods.value.map(p => ({
+        ...p,
+        start: p.start.toISOString(),
+        end: p.end.toISOString()
+      }))
       
       await new Promise<void>((resolve) => {
-        const processSingleEntity = async (entityId: string) => {
+        // Check if we're done
+        const checkCompletion = () => {
+          if (fetchQueue.length === 0 && analysisQueue.length === 0 && 
+              activeFetches === 0 && activeAnalyses === 0) {
+            resolve()
+          }
+        }
+        
+        // Fetch entities from Home Assistant
+        const fetchEntity = async (entityId: string) => {
           try {
+            // Update status to fetching
+            entityStatusMap.value.set(entityId, { status: 'fetching', message: 'Fetching history...' })
+            
             analysisProgress.value = { 
               current: completedCount, 
               total: relevantEntityIds.length, 
@@ -116,21 +153,44 @@ export const useBayesianAnalysis = () => {
             
             const entityHistory = JSON.parse(JSON.stringify(rawEntityHistory))
             
+            fetchedCount++
+            
+            // Mark as fetched (waiting for analysis)
+            entityStatusMap.value.set(entityId, { status: 'fetched', message: 'Waiting for analysis...' })
+            
+            // Add to analysis queue
+            analysisQueue.push({
+              entityId,
+              history: entityHistory,
+              periods: serializedPeriods
+            })
+            
+            // Trigger analysis processing
+            processAnalysisQueue()
+            
+          } catch (error) {
+            console.warn(`Failed to fetch entity ${entityId}:`, error)
+            entityStatusMap.value.set(entityId, { status: 'error', message: `Fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}` })
+            completedCount++
+          } finally {
+            activeFetches--
+            processFetchQueue()
+          }
+        }
+        
+        // Analyze entities using workers
+        const analyzeEntity = async (entityId: string, history: any, periods: any) => {
+          try {
+            // Update status to analyzing
+            entityStatusMap.value.set(entityId, { status: 'analyzing', message: 'Analyzing states...' })
+            
             analysisProgress.value = { 
               current: completedCount, 
               total: relevantEntityIds.length, 
               currentEntity: `Analyzing: ${entityId}` 
             }
             
-            const serializedPeriods = periods.value.map(p => ({
-              ...p,
-              start: p.start.toISOString(),
-              end: p.end.toISOString()
-            }))
-            const entityProbabilities = await workerPool.analyzeEntity(
-              entityHistory, 
-              serializedPeriods
-            )
+            const entityProbabilities = await workerPool.analyzeEntity(history, periods)
             
             if (Array.isArray(entityProbabilities)) {
               allProbabilities.push(...entityProbabilities)
@@ -143,35 +203,42 @@ export const useBayesianAnalysis = () => {
               currentEntity: entityId 
             }
             
+            // Mark as completed
+            entityStatusMap.value.set(entityId, { status: 'completed', message: 'Analysis complete' })
+            
           } catch (error) {
-            console.warn(`Failed to process entity ${entityId}:`, error)
+            console.warn(`Failed to analyze entity ${entityId}:`, error)
+            entityStatusMap.value.set(entityId, { status: 'error', message: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}` })
             completedCount++
           } finally {
-            activeFetches--
-            processNextEntity()
+            activeAnalyses--
+            processAnalysisQueue()
+            checkCompletion()
           }
         }
         
-        const processNextEntity = () => {
-          if (entityQueue.length === 0 && activeFetches === 0) {
-            resolve()
-            return
-          }
-          
-          while (activeFetches < maxConcurrentFetches && entityQueue.length > 0) {
-            const entityId = entityQueue.shift()!
+        // Process fetch queue
+        const processFetchQueue = () => {
+          while (activeFetches < maxConcurrentFetches && fetchQueue.length > 0) {
+            const entityId = fetchQueue.shift()!
             activeFetches++
-            
-            processSingleEntity(entityId).catch(error => {
-              console.error(`Error processing entity ${entityId}:`, error)
-              activeFetches--
-              completedCount++
-              processNextEntity()
-            })
+            fetchEntity(entityId)
+          }
+          checkCompletion()
+        }
+        
+        // Process analysis queue (send to workers)
+        const processAnalysisQueue = () => {
+          // Process as many as we have workers available
+          while (analysisQueue.length > 0 && activeAnalyses < 8) { // Assuming max 8 workers
+            const task = analysisQueue.shift()!
+            activeAnalyses++
+            analyzeEntity(task.entityId, task.history, task.periods)
           }
         }
         
-        processNextEntity()
+        // Start processing
+        processFetchQueue()
       })
       
       const sortedProbabilities = allProbabilities.sort((a, b) => b.discriminationPower - a.discriminationPower)
@@ -202,6 +269,7 @@ export const useBayesianAnalysis = () => {
     generatedConfig.value = null
     analysisError.value = null
     analysisProgress.value = { current: 0, total: 0, currentEntity: '' }
+    entityStatusMap.value.clear()
   }
   
   return {
@@ -215,6 +283,7 @@ export const useBayesianAnalysis = () => {
     isAnalyzing,
     analysisError,
     analysisProgress,
+    entityStatusMap,
     canAnalyze,
     calculator,
     connectToHA,

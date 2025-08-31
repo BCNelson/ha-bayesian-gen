@@ -3,8 +3,10 @@
     <h2>Entity Analysis Results</h2>
     
     <div v-if="isAnalyzing" class="analyzing">
-      <div class="spinner"></div>
-      <p>Analyzing entity states across time periods...</p>
+      <div class="progress-header">
+        <div class="spinner"></div>
+        <p>Analyzing entity states across time periods...</p>
+      </div>
       <div v-if="analysisProgress.total > 0" class="progress-info">
         <div class="progress-bar">
           <div 
@@ -18,6 +20,18 @@
         <p v-if="analysisProgress.currentEntity" class="current-entity">
           Current: {{ analysisProgress.currentEntity }}
         </p>
+      </div>
+      
+      <!-- Entity Status Cards during analysis -->
+      <div v-if="entityStatusMap.size > 0" class="entity-cards">
+        <EntityCard
+          v-for="[entityId, status] in sortedEntityStatusMap" 
+          :key="entityId"
+          :group="getEntityGroupForAnalysis(entityId)"
+          :entity-status="status"
+          :selected-entities="selectedEntities"
+          @toggle-selection="toggleEntitySelection"
+        />
       </div>
     </div>
     
@@ -49,139 +63,13 @@
       </div>
       
       <div class="entity-cards">
-        <div
+        <EntityCard
           v-for="group in filteredEntities"
           :key="group.entityId"
-          class="entity-group-card"
-        >
-          <div class="entity-group-header">
-            <div class="entity-name">{{ group.entityId }}</div>
-            <div class="entity-domain">{{ group.entityId.split('.')[0] }}</div>
-            <div class="best-discrimination">
-              <span>Best: </span>
-              <strong :class="getDiscriminationClass(group.bestDiscrimination)">
-                {{ (group.bestDiscrimination * 100).toFixed(1) }}%
-              </strong>
-            </div>
-          </div>
-          
-          <!-- Numeric entity display -->
-          <div v-if="group.isNumeric" class="numeric-entity">
-            <div class="numeric-header">
-              <span class="numeric-label">Numeric Sensor</span>
-              <span class="numeric-discrimination" :class="getDiscriminationClass(group.bestDiscrimination)">
-                {{ (group.bestDiscrimination * 100).toFixed(1) }}% discrimination
-              </span>
-            </div>
-            
-            <div 
-              :class="['numeric-selection-card', { selected: isEntitySelected(group.states[0]) }]"
-              @click="toggleEntitySelection(group.states[0])"
-            >
-              <div class="numeric-selection-checkbox">
-                <input 
-                  type="checkbox" 
-                  :checked="isEntitySelected(group.states[0])"
-                  @click.stop="toggleEntitySelection(group.states[0])"
-                />
-              </div>
-              
-              <div class="numeric-content">
-                <div v-if="group.numericThresholds" class="optimal-thresholds">
-                  <div class="thresholds-header">Optimal Thresholds:</div>
-                  <div class="thresholds-values">
-                    <span v-if="group.numericThresholds.above !== undefined" class="threshold-item above">
-                      Above: {{ group.numericThresholds.above.toFixed(2) }}
-                    </span>
-                    <span v-if="group.numericThresholds.below !== undefined" class="threshold-item below">
-                      Below: {{ group.numericThresholds.below.toFixed(2) }}
-                    </span>
-                    <span v-if="!group.numericThresholds.above && !group.numericThresholds.below" class="threshold-item none">
-                      No optimal thresholds found
-                    </span>
-                  </div>
-                </div>
-                
-                <div v-if="group.correctedProbabilities" class="numeric-probabilities">
-                  <div class="threshold-probabilities">
-                    <div class="prob-row-numeric">
-                      <span class="prob-label-numeric">When TRUE:</span>
-                      <div class="prob-bar-numeric">
-                        <div class="prob-fill true-fill" :style="{ width: `${group.correctedProbabilities.probGivenTrue * 100}%` }"></div>
-                      </div>
-                      <span class="prob-text-numeric">{{ (group.correctedProbabilities.probGivenTrue * 100).toFixed(1) }}%</span>
-                    </div>
-                    
-                    <div class="prob-row-numeric">
-                      <span class="prob-label-numeric">When FALSE:</span>
-                      <div class="prob-bar-numeric">
-                        <div class="prob-fill false-fill" :style="{ width: `${group.correctedProbabilities.probGivenFalse * 100}%` }"></div>
-                      </div>
-                      <span class="prob-text-numeric">{{ (group.correctedProbabilities.probGivenFalse * 100).toFixed(1) }}%</span>
-                    </div>
-                  </div>
-                  
-                  <div class="prob-summary">
-                    Based on threshold conditions across {{ group.states[0].totalTruePeriods }} TRUE and {{ group.states[0].totalFalsePeriods }} FALSE periods
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Categorical entity display -->
-          <div v-else class="entity-states">
-            <div class="states-header">
-              <span>States found ({{ group.states.length }}):</span>
-            </div>
-            
-            <div class="state-list">
-              <div
-                v-for="state in group.states"
-                :key="`${state.entityId}-${state.state}`"
-                :class="['state-card', { selected: isEntitySelected(state) }]"
-                @click="toggleEntitySelection(state)"
-              >
-                <div class="state-selection">
-                  <input 
-                    type="checkbox" 
-                    :checked="isEntitySelected(state)"
-                    @click.stop="toggleEntitySelection(state)"
-                  />
-                </div>
-                
-                <div class="state-info">
-                  <div class="state-header">
-                    <span class="state-value">{{ state.state }}</span>
-                    <span class="state-discrimination" :class="getDiscriminationClass(state.discriminationPower)">
-                      {{ (state.discriminationPower * 100).toFixed(1) }}%
-                    </span>
-                  </div>
-                  
-                  <div class="state-probabilities">
-                    <div class="prob-row">
-                      <span class="prob-label">TRUE:</span>
-                      <div class="prob-bar-mini">
-                        <div class="prob-fill true-fill" :style="{ width: `${state.probGivenTrue * 100}%` }"></div>
-                      </div>
-                      <span class="prob-text">{{ (state.probGivenTrue * 100).toFixed(1) }}%</span>
-                      <span class="occurrence-text">({{ state.trueOccurrences }}/{{ state.totalTruePeriods }})</span>
-                    </div>
-                    
-                    <div class="prob-row">
-                      <span class="prob-label">FALSE:</span>
-                      <div class="prob-bar-mini">
-                        <div class="prob-fill false-fill" :style="{ width: `${state.probGivenFalse * 100}%` }"></div>
-                      </div>
-                      <span class="prob-text">{{ (state.probGivenFalse * 100).toFixed(1) }}%</span>
-                      <span class="occurrence-text">({{ state.falseOccurrences }}/{{ state.totalFalsePeriods }})</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          :group="group"
+          :selected-entities="selectedEntities"
+          @toggle-selection="toggleEntitySelection"
+        />
       </div>
       
       <div class="entity-selection-controls">
@@ -221,6 +109,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { EntityProbability, TimePeriod } from '../types/bayesian'
+import EntityCard from './EntityCard.vue'
 
 const props = defineProps<{
   analyzedEntities: EntityProbability[]
@@ -229,6 +118,7 @@ const props = defineProps<{
   error: string | null
   totalEntities: number
   analysisProgress: { current: number; total: number; currentEntity: string }
+  entityStatusMap: Map<string, { status: 'queued' | 'fetching' | 'fetched' | 'analyzing' | 'completed' | 'error'; message?: string }>
 }>()
 
 const emit = defineEmits<{
@@ -356,6 +246,50 @@ const filteredEntities = computed(() => {
   }).sort((a, b) => b.bestDiscrimination - a.bestDiscrimination)
 })
 
+// Sort entity status map: completed entities by discrimination, incomplete by processing order
+const sortedEntityStatusMap = computed(() => {
+  const entries = Array.from(props.entityStatusMap.entries())
+  
+  // Separate completed and incomplete entities
+  const completed: Array<[string, any]> = []
+  const incomplete: Array<[string, any]> = []
+  
+  entries.forEach(([entityId, status]) => {
+    if (status.status === 'completed') {
+      completed.push([entityId, status])
+    } else {
+      incomplete.push([entityId, status])
+    }
+  })
+  
+  // Sort completed by discrimination power (best first)
+  completed.sort((a, b) => {
+    const groupA = groupedEntities.value.find(g => g.entityId === a[0])
+    const groupB = groupedEntities.value.find(g => g.entityId === b[0])
+    const discrimA = groupA?.bestDiscrimination || 0
+    const discrimB = groupB?.bestDiscrimination || 0
+    return discrimB - discrimA
+  })
+  
+  // Sort incomplete by status priority (processing order)
+  const statusPriority: Record<string, number> = {
+    'analyzing': 1,
+    'fetched': 2,
+    'fetching': 3,
+    'queued': 4,
+    'error': 5
+  }
+  
+  incomplete.sort((a, b) => {
+    const priorityA = statusPriority[a[1].status] || 99
+    const priorityB = statusPriority[b[1].status] || 99
+    return priorityA - priorityB
+  })
+  
+  // Combine: completed first (sorted by discrimination), then incomplete (sorted by status)
+  return [...completed, ...incomplete]
+})
+
 watch(() => props.analyzedEntities, (newEntities) => {
   if (newEntities.length > 0 && selectedEntities.value.length === 0) {
     const topEntities = newEntities
@@ -372,6 +306,18 @@ const getDiscriminationClass = (power: number) => {
   if (power >= 0.5) return 'good'
   if (power >= 0.3) return 'moderate'
   return 'low'
+}
+
+const getStatusLabel = (status: string) => {
+  switch (status) {
+    case 'queued': return 'Queued'
+    case 'fetching': return 'Fetching'
+    case 'fetched': return 'Fetched'
+    case 'analyzing': return 'Analyzing'
+    case 'completed': return 'Completed'
+    case 'error': return 'Error'
+    default: return status
+  }
 }
 
 const isEntitySelected = (entity: EntityProbability) => {
@@ -418,6 +364,25 @@ const selectNone = () => {
 const generateConfig = () => {
   emit('entitiesSelected', selectedEntities.value)
 }
+
+// Helper to create entity group for analysis display
+const getEntityGroupForAnalysis = (entityId: string) => {
+  // Check if we already have analysis results for this entity
+  const existingGroup = groupedEntities.value.find(g => g.entityId === entityId)
+  if (existingGroup) {
+    return existingGroup
+  }
+  
+  // Create a placeholder group for entities being analyzed
+  return {
+    entityId,
+    states: [],
+    bestDiscrimination: 0,
+    isNumeric: false,
+    numericThresholds: undefined,
+    correctedProbabilities: undefined
+  }
+}
 </script>
 
 <style scoped>
@@ -431,17 +396,18 @@ h2 {
   margin-bottom: 1.5rem;
 }
 
-.analyzing {
+
+.progress-header {
   text-align: center;
-  padding: 3rem;
+  margin-bottom: 1.5rem;
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   margin: 0 auto 1rem;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #4CAF50;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #4CAF50;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -487,6 +453,8 @@ h2 {
   100% { transform: rotate(360deg); }
 }
 
+/* Entity cards grid is used for both analysis and results */
+
 .error {
   padding: 1rem;
   background: #ffebee;
@@ -531,365 +499,6 @@ h2 {
   gap: 1.5rem;
 }
 
-.entity-group-card {
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  overflow: hidden;
-  transition: box-shadow 0.3s;
-}
-
-.entity-group-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.entity-group-header {
-  background: #f8f9fa;
-  padding: 1rem;
-  border-bottom: 1px solid #e0e0e0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.entity-name {
-  font-family: monospace;
-  font-size: 0.9rem;
-  color: #333;
-  font-weight: 500;
-  word-break: break-all;
-  flex: 1;
-}
-
-.entity-domain {
-  background: #e3f2fd;
-  color: #1976d2;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: uppercase;
-}
-
-.best-discrimination {
-  font-size: 0.85rem;
-  color: #666;
-}
-
-.entity-states {
-  padding: 1rem;
-}
-
-.states-header {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-}
-
-.state-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.state-card {
-  background: #fafafa;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 0.75rem;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.state-card:hover {
-  background: #f0f0f0;
-  border-color: #ccc;
-}
-
-.state-card.selected {
-  background: rgba(76, 175, 80, 0.1);
-  border-color: #4CAF50;
-}
-
-.state-selection input[type="checkbox"] {
-  cursor: pointer;
-  margin-top: 0.25rem;
-}
-
-.state-info {
-  flex: 1;
-}
-
-.state-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.state-value {
-  font-weight: 500;
-  color: #333;
-  background: white;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-  font-family: monospace;
-  font-size: 0.85rem;
-}
-
-.state-discrimination {
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.state-probabilities {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-bottom: 0.5rem;
-}
-
-.prob-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-}
-
-.prob-label {
-  min-width: 45px;
-  font-weight: 500;
-  color: #666;
-}
-
-.prob-bar-mini {
-  width: 60px;
-  height: 12px;
-  background: #f0f0f0;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.prob-fill {
-  height: 100%;
-  border-radius: 6px;
-  transition: width 0.3s ease;
-}
-
-.true-fill {
-  background: linear-gradient(90deg, #4CAF50, #66BB6A);
-}
-
-.false-fill {
-  background: linear-gradient(90deg, #f44336, #ef5350);
-}
-
-.prob-text {
-  min-width: 35px;
-  text-align: right;
-  font-weight: 500;
-}
-
-.occurrence-text {
-  color: #999;
-  font-size: 0.75rem;
-}
-
-.state-thresholds {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.threshold-mini {
-  padding: 0.2rem 0.4rem;
-  border-radius: 3px;
-  font-size: 0.7rem;
-  font-weight: 500;
-  font-family: monospace;
-}
-
-.threshold-mini.above {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #4CAF50;
-}
-
-.threshold-mini.below {
-  background: #e3f2fd;
-  color: #1976d2;
-  border: 1px solid #2196f3;
-}
-
-.numeric-entity {
-  padding: 1rem;
-}
-
-.numeric-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.numeric-label {
-  background: #fff3e0;
-  color: #f57c00;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: uppercase;
-}
-
-.numeric-discrimination {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.numeric-selection-card {
-  background: #fafafa;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1rem;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.numeric-selection-card:hover {
-  background: #f0f0f0;
-  border-color: #ccc;
-}
-
-.numeric-selection-card.selected {
-  background: rgba(76, 175, 80, 0.1);
-  border-color: #4CAF50;
-}
-
-.numeric-selection-checkbox input[type="checkbox"] {
-  cursor: pointer;
-  margin-top: 0.25rem;
-}
-
-.numeric-content {
-  flex: 1;
-}
-
-.optimal-thresholds {
-  margin-bottom: 1rem;
-}
-
-.thresholds-header {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 0.5rem;
-}
-
-.thresholds-values {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.threshold-item {
-  padding: 0.4rem 0.7rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  font-family: monospace;
-}
-
-.threshold-item.above {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #4CAF50;
-}
-
-.threshold-item.below {
-  background: #e3f2fd;
-  color: #1976d2;
-  border: 1px solid #2196f3;
-}
-
-.threshold-item.none {
-  background: #f5f5f5;
-  color: #666;
-  border: 1px solid #ddd;
-  font-style: italic;
-}
-
-.numeric-probabilities {
-  padding-top: 0.75rem;
-  border-top: 1px solid #e0e0e0;
-}
-
-.threshold-probabilities {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.prob-row-numeric {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-}
-
-.prob-label-numeric {
-  min-width: 70px;
-  font-weight: 500;
-  color: #666;
-}
-
-.prob-bar-numeric {
-  flex: 1;
-  height: 16px;
-  background: #f0f0f0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.prob-text-numeric {
-  min-width: 40px;
-  text-align: right;
-  font-weight: 500;
-}
-
-.prob-summary {
-  font-size: 0.8rem;
-  color: #666;
-  font-style: italic;
-}
-
-.excellent {
-  color: #4CAF50;
-}
-
-.good {
-  color: #8BC34A;
-}
-
-.moderate {
-  color: #FFC107;
-}
-
-.low {
-  color: #FF9800;
-}
-
 .no-results {
   background: #f5f5f5;
   padding: 2rem;
@@ -903,26 +512,6 @@ h2 {
   margin-top: 1rem;
 }
 
-.entity-card {
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.entity-card.selected {
-  border-color: #4CAF50;
-  background: rgba(76, 175, 80, 0.05);
-}
-
-.selection-checkbox {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  z-index: 10;
-}
-
-.selection-checkbox input[type="checkbox"] {
-  cursor: pointer;
-}
 
 .entity-selection-controls {
   margin-top: 2rem;

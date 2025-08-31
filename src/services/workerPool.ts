@@ -13,6 +13,7 @@ export class WorkerPool {
   private taskQueue: WorkerTask[] = []
   private activeTasks = new Map<string, WorkerTask>()
   private nextTaskId = 0
+  private progressCallback?: (entityId: string, status: string, message?: string) => void
 
   constructor(workerCount: number = 8) {
     const actualWorkerCount = Math.max(2, Math.min(workerCount, 8))
@@ -29,8 +30,14 @@ export class WorkerPool {
   }
 
   private handleWorkerMessage(e: MessageEvent) {
-    const { type, id, data, error } = e.data
+    const { type, id, data, error, progress } = e.data
     const worker = e.target as Worker
+
+    // Handle progress messages
+    if (type === 'ANALYSIS_PROGRESS' && progress && this.progressCallback) {
+      this.progressCallback(progress.entityId, progress.status, progress.message)
+      return
+    }
 
     const task = this.activeTasks.get(id)
     if (!task) return
@@ -118,6 +125,7 @@ export class WorkerPool {
     this.workers = []
     this.availableWorkers = []
     this.taskQueue = []
+    this.activeTasks.clear()
   }
 
   getStatus() {
@@ -127,5 +135,9 @@ export class WorkerPool {
       queuedTasks: this.taskQueue.length,
       activeTasks: this.activeTasks.size
     }
+  }
+
+  setProgressCallback(callback: (entityId: string, status: string, message?: string) => void) {
+    this.progressCallback = callback
   }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useBayesianAnalysis } from './composables/useBayesianAnalysis'
 import ConnectionForm from './components/ConnectionForm.vue'
 import TimePeriodSelector from './components/TimePeriodSelector.vue'
@@ -17,6 +17,7 @@ const {
   isAnalyzing,
   analysisError,
   analysisProgress,
+  entityStatusMap,
   canAnalyze,
   calculator,
   connectToHA,
@@ -27,16 +28,34 @@ const {
 } = useBayesianAnalysis()
 
 const selectedEntitiesForConfig = ref<EntityProbability[]>([])
+const isAutoConnecting = ref(false)
 
 const handleConnect = async (connection: any) => {
   const success = await connectToHA(connection)
   if (success) {
     resetAnalysis()
   }
+  isAutoConnecting.value = false
 }
 
 const handleConnectionStatus = () => {
 }
+
+// Auto-connect on mount if credentials are saved
+onMounted(async () => {
+  const savedUrl = localStorage.getItem('ha_url')
+  const savedToken = localStorage.getItem('ha_token')
+  
+  if (savedUrl && savedToken && !isConnected.value) {
+    isAutoConnecting.value = true
+    const connection = {
+      url: savedUrl,
+      token: savedToken
+    }
+    await connectToHA(connection)
+    isAutoConnecting.value = false
+  }
+})
 
 const handlePeriodsUpdate = (newPeriods: any) => {
   updatePeriods(newPeriods)
@@ -75,6 +94,7 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
         <ConnectionForm 
           :is-connected="isConnected"
           :connection-error="connectionError"
+          :is-auto-connecting="isAutoConnecting"
           @connect="handleConnect"
           @connection-status="handleConnectionStatus"
         />
@@ -132,6 +152,7 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
           :error="analysisError"
           :total-entities="entities.length"
           :analysis-progress="analysisProgress"
+          :entity-status-map="entityStatusMap"
           @entities-selected="handleEntitiesSelected"
         />
       </div>

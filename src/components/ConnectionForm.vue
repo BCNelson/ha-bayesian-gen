@@ -60,6 +60,10 @@
         </div>
       </div>
       
+      <div v-if="props.isAutoConnecting" class="info">
+        Connecting automatically with saved credentials...
+      </div>
+      
       <div v-if="props.isConnected" class="success">
         Connected successfully!
       </div>
@@ -74,6 +78,7 @@ import type { HAConnection } from '../types/homeAssistant'
 const props = defineProps<{
   isConnected?: boolean
   connectionError?: string | null
+  isAutoConnecting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -197,6 +202,14 @@ button:disabled {
   padding: 0.75rem;
   background: #e8f5e9;
   color: #2e7d32;
+  border-radius: 4px;
+}
+
+.info {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #e3f2fd;
+  color: #1976d2;
   border-radius: 4px;
 }
 

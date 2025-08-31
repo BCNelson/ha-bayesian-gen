@@ -217,6 +217,113 @@
       </div>
     </div>
     
+    <!-- Configuration Controls -->
+    <div class="config-controls">
+      <div class="config-status">
+        <span v-if="currentConfigName" class="current-config">
+          📋 <strong>{{ currentConfigName }}</strong>
+          <span class="auto-save-indicator">• Auto-saving</span>
+        </span>
+        <span v-else class="no-config">No configuration loaded</span>
+      </div>
+      <button 
+        @click="showConfigDialog = true"
+        class="config-btn"
+      >
+        🔄 Switch/New Config
+      </button>
+    </div>
+
+    <!-- Config Dialog -->
+    <div v-if="showConfigDialog" class="dialog-overlay" @click.self="showConfigDialog = false">
+      <div class="dialog">
+        <h3>{{ isCreatingNew ? 'Create New Configuration' : 'Manage Configurations' }}</h3>
+        
+        <div v-if="!isCreatingNew" class="dialog-content">
+          <div class="create-new-section">
+            <button @click="isCreatingNew = true" class="create-new-btn">
+              ➕ Create New Configuration
+            </button>
+          </div>
+          
+          <div v-if="savedConfigs.length > 0" class="config-list">
+            <h4>Existing Configurations</h4>
+            <div 
+              v-for="config in savedConfigs" 
+              :key="config.name"
+              class="config-item"
+              :class="{ active: config.name === currentConfigName }"
+            >
+              <div class="config-info">
+                <span class="config-name">{{ config.name }}</span>
+                <span class="config-details">
+                  {{ config.periods.length }} periods • 
+                  {{ format(new Date(config.lastModified), 'MMM d, h:mm a') }}
+                </span>
+              </div>
+              <div class="config-actions">
+                <button 
+                  v-if="config.name !== currentConfigName"
+                  @click="switchConfig(config.name)"
+                  class="switch-btn"
+                >
+                  Switch
+                </button>
+                <span v-else class="current-badge">Current</span>
+                <button 
+                  @click="deleteConfig(config.name)"
+                  class="delete-btn"
+                  title="Delete configuration"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          </div>
+          <div v-else class="empty-state">
+            No saved configurations yet
+          </div>
+        </div>
+        
+        <div v-else class="dialog-content">
+          <input 
+            v-model="newConfigName"
+            type="text"
+            placeholder="Enter configuration name"
+            @keyup.enter="createNewConfig"
+            @keyup.escape="isCreatingNew = false"
+            autofocus
+          />
+          <p class="dialog-info">This will create a new empty configuration</p>
+        </div>
+        
+        <div class="dialog-actions">
+          <button 
+            v-if="isCreatingNew" 
+            @click="isCreatingNew = false" 
+            class="cancel-btn"
+          >
+            Back
+          </button>
+          <button 
+            v-else
+            @click="showConfigDialog = false" 
+            class="cancel-btn"
+          >
+            Close
+          </button>
+          <button 
+            v-if="isCreatingNew"
+            @click="createNewConfig" 
+            :disabled="!newConfigName.trim()" 
+            class="save-btn"
+          >
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+    
     <div v-if="periods.length > 0" class="periods-list">
       <div class="periods-header">
         <h3>Added Periods ({{ periods.length }})</h3>
@@ -305,6 +412,13 @@ const emit = defineEmits<{
 const periods = ref<TimePeriod[]>([])
 const mode = ref<'single' | 'bulk' | 'timeline'>('single')
 const currentState = ref(true)
+
+// Saved configurations management
+const savedConfigs = ref<{ name: string; periods: TimePeriod[]; lastModified: string }[]>([])
+const currentConfigName = ref('')
+const showConfigDialog = ref(false)
+const newConfigName = ref('')
+const isCreatingNew = ref(false)
 
 const newPeriod = ref({
   start: '',
@@ -397,6 +511,7 @@ const addSinglePeriod = () => {
   
   periods.value.push(period)
   mergeAdjacentPeriods()
+  autoSave()
   emit('periodsUpdated', periods.value)
   
   newPeriod.value = {
@@ -441,6 +556,7 @@ const addBulkPeriods = () => {
   
   periods.value.push(...newPeriods)
   mergeAdjacentPeriods()
+  autoSave()
   emit('periodsUpdated', periods.value)
 }
 
@@ -558,6 +674,7 @@ const endTimeSelection = () => {
     
     periods.value.push(period)
     mergeAdjacentPeriods()
+    autoSave()
     emit('periodsUpdated', periods.value)
   }
   
@@ -568,6 +685,7 @@ const endTimeSelection = () => {
 
 const removePeriod = (id: string) => {
   periods.value = periods.value.filter(p => p.id !== id)
+  autoSave()
   emit('periodsUpdated', periods.value)
 }
 
@@ -602,6 +720,7 @@ const markAllRemainingAs = (isTruePeriod: boolean) => {
   if (newPeriods.length > 0) {
     periods.value.push(...newPeriods)
     mergeAdjacentPeriods()
+    autoSave()
     emit('periodsUpdated', periods.value)
   }
 }
@@ -609,6 +728,7 @@ const markAllRemainingAs = (isTruePeriod: boolean) => {
 const clearAllPeriods = () => {
   if (confirm('Are you sure you want to remove all time periods?')) {
     periods.value = []
+    autoSave()
     emit('periodsUpdated', periods.value)
   }
 }
@@ -680,6 +800,145 @@ const mergeAdjacentPeriods = () => {
   }
 }
 
+// Save/Load configuration functions
+const loadSavedConfigs = () => {
+  const saved = localStorage.getItem('ha_bayesian_configs')
+  if (saved) {
+    try {
+      const configs = JSON.parse(saved)
+      savedConfigs.value = configs.map((config: any) => ({
+        name: config.name,
+        periods: config.periods.map((p: any) => ({
+          ...p,
+          start: new Date(p.start),
+          end: new Date(p.end)
+        })),
+        lastModified: config.lastModified || new Date().toISOString()
+      }))
+    } catch (e) {
+      console.error('Failed to load saved configs:', e)
+    }
+  }
+}
+
+const autoSave = () => {
+  if (!currentConfigName.value) {
+    // If no config is selected, create a default one
+    if (periods.value.length > 0) {
+      currentConfigName.value = 'Default Configuration'
+    } else {
+      return
+    }
+  }
+  
+  const existingIndex = savedConfigs.value.findIndex(c => c.name === currentConfigName.value)
+  const configData = {
+    name: currentConfigName.value,
+    periods: periods.value,
+    lastModified: new Date().toISOString()
+  }
+  
+  if (existingIndex >= 0) {
+    savedConfigs.value[existingIndex] = configData
+  } else {
+    savedConfigs.value.push(configData)
+  }
+  
+  // Save to localStorage
+  const toSave = savedConfigs.value.map(c => ({
+    name: c.name,
+    periods: c.periods.map(p => ({
+      ...p,
+      start: p.start.toISOString(),
+      end: p.end.toISOString()
+    })),
+    lastModified: c.lastModified
+  }))
+  localStorage.setItem('ha_bayesian_configs', JSON.stringify(toSave))
+  localStorage.setItem('ha_bayesian_last_config', currentConfigName.value)
+}
+
+const createNewConfig = () => {
+  if (!newConfigName.value.trim()) return
+  
+  const name = newConfigName.value.trim()
+  
+  // Check if name already exists
+  if (savedConfigs.value.some(c => c.name === name)) {
+    alert(`Configuration "${name}" already exists. Please choose a different name.`)
+    return
+  }
+  
+  // Clear current periods and set new config name
+  periods.value = []
+  currentConfigName.value = name
+  newConfigName.value = ''
+  isCreatingNew.value = false
+  showConfigDialog.value = false
+  
+  // Auto-save the empty config
+  autoSave()
+  emit('periodsUpdated', periods.value)
+}
+
+const switchConfig = (configName: string) => {
+  const config = savedConfigs.value.find(c => c.name === configName)
+  if (config) {
+    periods.value = [...config.periods]
+    currentConfigName.value = configName
+    showConfigDialog.value = false
+    localStorage.setItem('ha_bayesian_last_config', configName)
+    emit('periodsUpdated', periods.value)
+  }
+}
+
+const deleteConfig = (configName: string) => {
+  if (!confirm(`Delete configuration "${configName}"?`)) return
+  
+  savedConfigs.value = savedConfigs.value.filter(c => c.name !== configName)
+  
+  // Update localStorage
+  const toSave = savedConfigs.value.map(c => ({
+    name: c.name,
+    periods: c.periods.map(p => ({
+      ...p,
+      start: p.start.toISOString(),
+      end: p.end.toISOString()
+    })),
+    lastModified: c.lastModified
+  }))
+  localStorage.setItem('ha_bayesian_configs', JSON.stringify(toSave))
+  
+  if (currentConfigName.value === configName) {
+    // Switch to another config or create default
+    if (savedConfigs.value.length > 0) {
+      switchConfig(savedConfigs.value[0].name)
+    } else {
+      currentConfigName.value = 'Default Configuration'
+      periods.value = []
+      emit('periodsUpdated', periods.value)
+    }
+  }
+}
+
+// Auto-load last used config
+const loadLastConfig = () => {
+  const lastConfigName = localStorage.getItem('ha_bayesian_last_config')
+  
+  if (lastConfigName && savedConfigs.value.some(c => c.name === lastConfigName)) {
+    switchConfig(lastConfigName)
+  } else if (savedConfigs.value.length > 0) {
+    // Load the most recently modified config
+    const sortedConfigs = [...savedConfigs.value].sort((a, b) => 
+      new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+    )
+    switchConfig(sortedConfigs[0].name)
+  } else {
+    // Create a default config if none exist
+    currentConfigName.value = 'Default Configuration'
+  }
+}
+
 onMounted(() => {
   const weekAgo = subDays(now, 7)
   const yesterday = subDays(now, 1)
@@ -687,6 +946,10 @@ onMounted(() => {
   bulkSelection.value.startDate = format(weekAgo, 'yyyy-MM-dd')
   bulkSelection.value.endDate = format(yesterday, 'yyyy-MM-dd')
   bulkSelection.value.daysOfWeek = [1, 2, 3, 4, 5] // Weekdays
+  
+  // Load saved configurations and auto-load last used
+  loadSavedConfigs()
+  loadLastConfig()
 })
 </script>
 
@@ -1226,10 +1489,295 @@ button:disabled {
   border-top: 1px solid rgba(0,0,0,0.1);
 }
 
+.config-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #f0f7ff;
+  border: 1px solid #2196f3;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+}
+
+.config-status {
+  font-size: 0.95rem;
+}
+
+.current-config {
+  color: #1976d2;
+}
+
+.current-config strong {
+  font-weight: 600;
+}
+
+.no-config {
+  color: #666;
+  font-style: italic;
+}
+
+.auto-save-indicator {
+  color: #4CAF50;
+  font-size: 0.85rem;
+  margin-left: 0.5rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.config-btn {
+  padding: 0.5rem 1rem;
+  background: white;
+  border: 1px solid #2196f3;
+  color: #1976d2;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+}
+
+.config-btn:hover {
+  background: #e3f2fd;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  min-width: 400px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dialog h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.dialog-content {
+  margin-bottom: 1.5rem;
+}
+
+.dialog-content input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.dialog-info {
+  margin-top: 0.5rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.dialog-actions button {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.dialog-actions .cancel-btn {
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.dialog-actions .cancel-btn:hover {
+  background: #e0e0e0;
+}
+
+.dialog-actions .save-btn {
+  background: #4CAF50;
+  color: white;
+  border: none;
+}
+
+.dialog-actions .save-btn:hover:not(:disabled) {
+  background: #45a049;
+}
+
+.dialog-actions .save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.create-new-section {
+  margin-bottom: 1.5rem;
+}
+
+.create-new-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.create-new-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.config-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.config-list h4 {
+  margin: 0 0 1rem 0;
+  color: #666;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.config-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  transition: all 0.2s;
+}
+
+.config-item:hover {
+  background: #f8f9fa;
+}
+
+.config-item.active {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.config-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.config-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.config-details {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.config-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.switch-btn {
+  padding: 0.25rem 0.75rem;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.switch-btn:hover {
+  background: #1976d2;
+}
+
+.current-badge {
+  padding: 0.25rem 0.75rem;
+  background: #e8f5e9;
+  color: #4CAF50;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.delete-btn {
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0.6;
+}
+
+.delete-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+  font-style: italic;
+}
+
 @media (max-width: 768px) {
   .controls {
     flex-direction: column;
     gap: 1rem;
+  }
+  
+  .config-controls {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+  
+  .config-buttons {
+    justify-content: center;
+    width: 100%;
+  }
+  
+  .config-btn {
+    flex: 1;
+  }
+  
+  .dialog {
+    min-width: 90vw;
+    margin: 1rem;
   }
   
   .form-row {

@@ -10,8 +10,6 @@ export interface NumericStateStats {
   isNumeric: boolean
   min?: number
   max?: number
-  mean?: number
-  stdDev?: number
   trueChunks?: Array<{ value: number; duration: number }>
   falseChunks?: Array<{ value: number; duration: number }>
 }
