@@ -126,7 +126,7 @@ const emit = defineEmits<{
 }>()
 
 const searchFilter = ref('')
-const minDiscrimination = ref(0)
+const minDiscrimination = ref(0.3)
 const selectedEntities = ref<EntityProbability[]>([])
 
 const groupedEntities = computed(() => {
@@ -301,30 +301,6 @@ watch(() => props.analyzedEntities, (newEntities) => {
   }
 }, { immediate: true })
 
-const getDiscriminationClass = (power: number) => {
-  if (power >= 0.7) return 'excellent'
-  if (power >= 0.5) return 'good'
-  if (power >= 0.3) return 'moderate'
-  return 'low'
-}
-
-const getStatusLabel = (status: string) => {
-  switch (status) {
-    case 'queued': return 'Queued'
-    case 'fetching': return 'Fetching'
-    case 'fetched': return 'Fetched'
-    case 'analyzing': return 'Analyzing'
-    case 'completed': return 'Completed'
-    case 'error': return 'Error'
-    default: return status
-  }
-}
-
-const isEntitySelected = (entity: EntityProbability) => {
-  return selectedEntities.value.some(e => 
-    e.entityId === entity.entityId && e.state === entity.state
-  )
-}
 
 const toggleEntitySelection = (entity: EntityProbability) => {
   const index = selectedEntities.value.findIndex(e => 

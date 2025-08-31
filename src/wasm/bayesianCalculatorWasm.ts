@@ -3,8 +3,7 @@ import type { HAHistoryResponse } from '../types/homeAssistant'
 // Import the generated WASM types
 import type { 
   HAHistoryEntry as WasmHAHistoryEntry,
-  TimePeriod as WasmTimePeriod,
-  EntityProbability as WasmEntityProbability 
+  TimePeriod as WasmTimePeriod
 } from './pkg/bayesian_calculator'
 
 let wasmModule: any = null

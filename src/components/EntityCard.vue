@@ -28,13 +28,27 @@
     
     <!-- Show content only when analysis is complete or no status -->
     <template v-if="!entityStatus || entityStatus.status === 'completed'">
+      <!-- Compact view for low discrimination entities -->
+      <div v-if="group.bestDiscrimination < 0.1 && !expandLowDiscrimination" class="low-discrimination-compact">
+        <button @click="expandLowDiscrimination = true" class="expand-compact-btn">
+          Expand ▼
+        </button>
+      </div>
+      
       <!-- Numeric entity display -->
-      <div v-if="group.isNumeric" class="numeric-entity">
+      <div v-else-if="group.isNumeric" class="numeric-entity">
         <div class="numeric-header">
           <span class="numeric-label">Numeric Sensor</span>
           <span class="numeric-discrimination" :class="getDiscriminationClass(group.bestDiscrimination)">
             {{ (group.bestDiscrimination * 100).toFixed(1) }}% discrimination
           </span>
+          <button 
+            v-if="group.bestDiscrimination < 0.1 && expandLowDiscrimination"
+            @click="expandLowDiscrimination = false"
+            class="collapse-btn"
+          >
+            Collapse ▲
+          </button>
         </div>
         
         <div 
@@ -96,11 +110,32 @@
       <div v-else class="entity-states">
         <div class="states-header">
           <span>States found ({{ group.states.length }}):</span>
+          <button 
+            v-if="group.states.length > 4 && !showAllStates"
+            @click="showAllStates = true"
+            class="show-more-btn"
+          >
+            Show all ({{ group.states.length - 4 }} more)
+          </button>
+          <button 
+            v-if="group.states.length > 4 && showAllStates"
+            @click="showAllStates = false"
+            class="show-less-btn"
+          >
+            Show less
+          </button>
+          <button 
+            v-if="group.bestDiscrimination < 0.1 && expandLowDiscrimination"
+            @click="expandLowDiscrimination = false"
+            class="collapse-btn"
+          >
+            Collapse ▲
+          </button>
         </div>
         
         <div class="state-list">
           <div
-            v-for="state in group.states"
+            v-for="state in displayedStates"
             :key="`${state.entityId}-${state.state}`"
             :class="['state-card', { selected: isSelected(state) }]"
             @click="toggleSelection(state)"
@@ -147,7 +182,7 @@
     </template>
 
     <!-- Show placeholder during analysis -->
-    <div v-else-if="entityStatus && entityStatus.status !== 'completed' && entityStatus.status !== 'error'" class="entity-analyzing-placeholder">
+    <div v-else-if="entityStatus && entityStatus.status !== 'error'" class="entity-analyzing-placeholder">
       <div class="placeholder-content">
         <div class="placeholder-line"></div>
         <div class="placeholder-line short"></div>
@@ -163,7 +198,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { EntityProbability } from '../types/bayesian'
 
 interface EntityGroup {
@@ -189,6 +224,19 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggleSelection: [entity: EntityProbability]
 }>()
+
+const showAllStates = ref(false)
+const expandLowDiscrimination = ref(false)
+
+const displayedStates = computed(() => {
+  if (!props.group || !props.group.states) {
+    return []
+  }
+  if (showAllStates.value || props.group.states.length <= 4) {
+    return props.group.states
+  }
+  return props.group.states.slice(0, 4)
+})
 
 const statusClass = computed(() => {
   if (props.entityStatus) {
@@ -425,6 +473,28 @@ const toggleSelection = (entity: EntityProbability) => {
   color: #666;
   margin-bottom: 0.75rem;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.show-more-btn,
+.show-less-btn {
+  padding: 0.25rem 0.5rem;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #1976d2;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.show-more-btn:hover,
+.show-less-btn:hover {
+  background: #e3f2fd;
+  border-color: #1976d2;
 }
 
 .state-list {
@@ -692,4 +762,48 @@ const toggleSelection = (entity: EntityProbability) => {
 .good { color: #8BC34A; }
 .moderate { color: #FFC107; }
 .low { color: #FF9800; }
+
+/* Low discrimination compact view */
+.low-discrimination-compact {
+  padding: 0.2rem 1rem;
+  background: #fafafa;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: center;
+}
+
+.expand-compact-btn {
+  padding: 0.1rem 0.5rem;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.expand-compact-btn:hover {
+  background: white;
+  border-color: #999;
+  color: #666;
+}
+
+.collapse-btn {
+  padding: 0.2rem 0.5rem;
+  background: #fff3e0;
+  border: 1px solid #ff9800;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #f57c00;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: auto;
+}
+
+.collapse-btn:hover {
+  background: #ffe0b2;
+  border-color: #f57c00;
+}
 </style>
