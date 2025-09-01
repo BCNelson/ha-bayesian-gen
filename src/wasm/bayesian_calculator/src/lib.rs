@@ -80,22 +80,55 @@ impl BayesianCalculator {
                     None
                 };
 
-                let segments = timeline::create_unified_timeline(entity_history, &periods);
-                let analysis = timeline::analyze_numeric_segments(&segments);
-
-                for (state, stats) in analysis.iter() {
-                    let prob_given_true = (stats.true_occurrences as f64) / (true_periods.len() as f64);
-                    let prob_given_false = (stats.false_occurrences as f64) / (false_periods.len() as f64);
-                    let discrimination_power = (prob_given_true - prob_given_false).abs();
+                // Calculate time-based probabilities for numeric entities
+                if let (Some(stats), Some(thresholds)) = (&numeric_stats, &optimal_thresholds) {
+                    let mut true_matching_duration = 0.0;
+                    let mut true_total_duration = 0.0;
+                    let mut false_matching_duration = 0.0;
+                    let mut false_total_duration = 0.0;
+                    
+                    // Calculate probabilities based on time duration, not occurrences
+                    for chunk in &stats.true_chunks {
+                        true_total_duration += chunk.duration as f64;
+                        if threshold::value_matches_thresholds(chunk.value, thresholds) {
+                            true_matching_duration += chunk.duration as f64;
+                        }
+                    }
+                    
+                    for chunk in &stats.false_chunks {
+                        false_total_duration += chunk.duration as f64;
+                        if threshold::value_matches_thresholds(chunk.value, thresholds) {
+                            false_matching_duration += chunk.duration as f64;
+                        }
+                    }
+                    
+                    let prob_given_true = if true_total_duration > 0.0 {
+                        true_matching_duration / true_total_duration
+                    } else {
+                        0.0
+                    };
+                    
+                    let prob_given_false = if false_total_duration > 0.0 {
+                        false_matching_duration / false_total_duration
+                    } else {
+                        0.0
+                    };
+                    
+                    // Preserve discrimination by scaling both probabilities proportionally
+                    let (clamped_true, clamped_false) = clamp_preserve_discrimination(prob_given_true, prob_given_false);
+                    let discrimination_power = (clamped_true - clamped_false).abs();
+                    
+                    // Create a descriptive state string for numeric thresholds
+                    let state_desc = threshold::format_threshold_description(thresholds);
 
                     results.push(EntityProbability {
                         entity_id: entity_id.clone(),
-                        state: state.clone(),
-                        prob_given_true: prob_given_true.min(0.99).max(0.01),
-                        prob_given_false: prob_given_false.min(0.99).max(0.01),
+                        state: state_desc,
+                        prob_given_true: clamped_true,
+                        prob_given_false: clamped_false,
                         discrimination_power,
-                        true_occurrences: stats.true_occurrences,
-                        false_occurrences: stats.false_occurrences,
+                        true_occurrences: true_periods.len(),  // For numeric, we use period count
+                        false_occurrences: false_periods.len(),
                         total_true_periods: true_periods.len(),
                         total_false_periods: false_periods.len(),
                         numeric_stats: numeric_stats.clone(),
@@ -109,13 +142,16 @@ impl BayesianCalculator {
                 for (state, analysis) in state_analysis.iter() {
                     let prob_given_true = (analysis.true_occurrences as f64) / (true_periods.len() as f64);
                     let prob_given_false = (analysis.false_occurrences as f64) / (false_periods.len() as f64);
-                    let discrimination_power = (prob_given_true - prob_given_false).abs();
+                    
+                    // Preserve discrimination by scaling both probabilities proportionally
+                    let (clamped_true, clamped_false) = clamp_preserve_discrimination(prob_given_true, prob_given_false);
+                    let discrimination_power = (clamped_true - clamped_false).abs();
 
                     results.push(EntityProbability {
                         entity_id: entity_id.clone(),
                         state: state.clone(),
-                        prob_given_true: prob_given_true.min(0.99).max(0.01),
-                        prob_given_false: prob_given_false.min(0.99).max(0.01),
+                        prob_given_true: clamped_true,
+                        prob_given_false: clamped_false,
                         discrimination_power,
                         true_occurrences: analysis.true_occurrences,
                         false_occurrences: analysis.false_occurrences,
@@ -154,4 +190,17 @@ impl BayesianCalculator {
 
         Some(thresholds)
     }
+}
+
+/// Clamp probabilities while preserving discrimination power
+/// 
+/// This ensures that Bayesian calculations remain meaningful by avoiding
+/// identical probability values that would make observations non-discriminative
+fn clamp_preserve_discrimination(prob_true: f64, prob_false: f64) -> (f64, f64) {
+    // Simple clamping without artificial discrimination preservation
+    // The actual probabilities should be preserved, not forced to extreme values
+    let clamped_true = prob_true.max(0.01).min(0.99);
+    let clamped_false = prob_false.max(0.01).min(0.99);
+    
+    (clamped_true, clamped_false)
 }

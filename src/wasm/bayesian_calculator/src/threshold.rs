@@ -5,6 +5,26 @@ use std::collections::HashMap;
 
 pub type ThresholdCache = HashMap<String, OptimalThresholds>;
 
+/// Check if a value matches the given thresholds
+pub fn value_matches_thresholds(value: f64, thresholds: &OptimalThresholds) -> bool {
+    match (thresholds.above, thresholds.below) {
+        (Some(above), Some(below)) => value > above && value <= below,
+        (Some(above), None) => value > above,
+        (None, Some(below)) => value <= below,
+        (None, None) => false,
+    }
+}
+
+/// Format threshold description for display
+pub fn format_threshold_description(thresholds: &OptimalThresholds) -> String {
+    match (thresholds.above, thresholds.below) {
+        (Some(above), Some(below)) => format!("{:.2} < value <= {:.2}", above, below),
+        (Some(above), None) => format!("> {:.2}", above),
+        (None, Some(below)) => format!("<= {:.2}", below),
+        (None, None) => "numeric".to_string(),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]

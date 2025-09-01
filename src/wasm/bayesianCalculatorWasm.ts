@@ -61,6 +61,18 @@ export class WasmBayesianCalculator {
         wasmPeriods
       )
 
+      // DEBUG: Log results for target entity
+      const targetEntity = 'sensor.0xe406bffffe000eea_pm25'
+      const targetResults = (result as EntityProbability[]).filter(r => r.entityId === targetEntity)
+      if (targetResults.length > 0) {
+        console.log(`WASM DEBUG - ${targetEntity} results from WASM:`, targetResults.map(r => ({
+          state: r.state,
+          probGivenTrue: r.probGivenTrue,
+          probGivenFalse: r.probGivenFalse,
+          discriminationPower: r.discriminationPower
+        })))
+      }
+
       return result as EntityProbability[]
     } catch (error) {
       console.error('WASM calculation error:', error)

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { NConfigProvider, NMessageProvider, NCard, NButton, NSpace, NAlert, NText, NList, NListItem, NTag } from 'naive-ui'
+import { ref, onMounted, computed, defineAsyncComponent } from 'vue'
+import { NConfigProvider, NMessageProvider, NCard, NButton, NSpace, NAlert, NText, NList, NListItem, NTag, NTabs, NTabPane, NBadge } from 'naive-ui'
 import { useBayesianAnalysis } from './composables/useBayesianAnalysis'
-import ConnectionForm from './components/ConnectionForm.vue'
-import TimePeriodSelector from './components/TimePeriodSelector.vue'
-import EntityAnalyzer from './components/EntityAnalyzer.vue'
-import ConfigOutput from './components/ConfigOutput.vue'
+// Lazy load components for better performance
+const ConnectionForm = defineAsyncComponent(() => import('./components/ConnectionForm.vue'))
+const TimePeriodSelector = defineAsyncComponent(() => import('./components/TimePeriodSelector.vue')) 
+const EntityAnalyzer = defineAsyncComponent(() => import('./components/EntityAnalyzer.vue'))
+const ConfigOutput = defineAsyncComponent(() => import('./components/ConfigOutput.vue'))
 import type { EntityProbability } from './types/bayesian'
 
 const {
@@ -23,6 +24,7 @@ const {
   calculator,
   haConnection,
   cachedHistoricalData,
+  entityBuffer, // NEW: Buffer access
   connectToHA,
   updatePeriods,
   analyzeEntities,
@@ -32,6 +34,37 @@ const {
 
 const selectedEntitiesForConfig = ref<EntityProbability[]>([])
 const isAutoConnecting = ref(false)
+const activeTab = ref('connection')
+
+// Computed properties for tab states
+const tabStates = computed(() => ({
+  connection: {
+    disabled: false,
+    completed: isConnected.value,
+    title: 'Connect to HA',
+    badge: isConnected.value ? '✓' : '1'
+  },
+  periods: {
+    disabled: !isConnected.value,
+    completed: isConnected.value && periods.value.length > 0,
+    title: 'Define Periods',
+    badge: (isConnected.value && periods.value.length > 0) ? '✓' : '2'
+  },
+  analysis: {
+    disabled: !isConnected.value || periods.value.length === 0,
+    completed: analyzedEntities.value.length > 0,
+    title: 'Analyze Entities',
+    badge: analyzedEntities.value.length > 0 ? `✓ ${analyzedEntities.value.length}` : '3'
+  },
+  config: {
+    disabled: !generatedConfig.value,
+    completed: !!generatedConfig.value,
+    title: 'Configuration',
+    badge: generatedConfig.value ? '✓' : '4'
+  }
+}))
+
+// No auto-advancement - let users control their navigation
 
 const handleConnect = async (connection: any) => {
   const success = await connectToHA(connection)
@@ -62,6 +95,7 @@ onMounted(async () => {
 
 const handlePeriodsUpdate = (newPeriods: any) => {
   updatePeriods(newPeriods)
+  // Don't auto-advance - let users review their periods first
 }
 
 const handleAnalyze = () => {
@@ -71,11 +105,14 @@ const handleAnalyze = () => {
 const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
   selectedEntitiesForConfig.value = selectedEntities
   if (selectedEntities.length > 0) {
+    // User explicitly selected these entities - use ALL of them, no filtering
     const config = calculator.generateBayesianConfig(
       selectedEntities,
       'Custom Bayesian Sensor',
-      selectedEntities.length // Use ALL selected entities, no limit
+      selectedEntities.length,
+      true // skipFiltering = true for user selections
     )
+    
     updateGeneratedConfig(config)
   }
 }
@@ -85,141 +122,224 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
   <n-config-provider>
     <n-message-provider>
       <div class="app">
-      <header>
-        <h1>Home Assistant Bayesian Sensor Generator</h1>
-        <n-text depth="3">Generate optimized Bayesian sensor configurations based on your historical data</n-text>
-      </header>
-      
-      <main>
-        <n-card
-          class="step"
-          :class="{ completed: isConnected }"
-          :bordered="false"
-        >
-          <template #header>
-            <div class="step-header">
-              <n-tag :type="isConnected ? 'success' : 'default'" round size="large">
-                1
-              </n-tag>
-              <h2>Connect to Home Assistant</h2>
-            </div>
-          </template>
-          <ConnectionForm 
-            :is-connected="isConnected"
-            :connection-error="connectionError"
-            :is-auto-connecting="isAutoConnecting"
-            @connect="handleConnect"
-            @connection-status="handleConnectionStatus"
-          />
-        </n-card>
+        <header>
+          <h1>Home Assistant Bayesian Sensor Generator</h1>
+          <n-text depth="3">Generate optimized Bayesian sensor configurations based on your historical data</n-text>
+        </header>
         
-        <n-card
-          v-if="isConnected"
-          class="step"
-          :class="{ completed: periods.length > 0 }"
-          :bordered="false"
-        >
-          <template #header>
-            <div class="step-header">
-              <n-tag :type="periods.length > 0 ? 'success' : 'default'" round size="large">
-                2
-              </n-tag>
-              <h2>Define Time Periods</h2>
-            </div>
-          </template>
-          <TimePeriodSelector @periods-updated="handlePeriodsUpdate" />
-        </n-card>
-        
-        <n-card
-          v-if="isConnected && periods.length > 0"
-          class="step"
-          :bordered="false"
-        >
-          <template #header>
-            <div class="step-header">
-              <n-tag :type="analyzedEntities.length > 0 ? 'success' : 'default'" round size="large">
-                3
-              </n-tag>
-              <h2>Analyze Entities</h2>
-            </div>
-          </template>
-          
-          <n-space vertical align="center" class="analyze-section">
-            <n-button
-              @click="handleAnalyze"
-              :disabled="!canAnalyze || isAnalyzing"
-              :loading="isAnalyzing"
-              type="primary"
-              size="large"
+        <main>
+          <n-tabs 
+            v-model:value="activeTab" 
+            type="card" 
+            size="large"
+            animated
+            class="main-tabs"
+          >
+            <!-- Step 1: Connection -->
+            <n-tab-pane 
+              name="connection" 
+              :disabled="tabStates.connection.disabled"
+              class="tab-pane"
             >
-              {{ isAnalyzing ? 'Analyzing...' : 'Analyze All Entities' }}
-            </n-button>
-            <n-text v-if="entities.length > 0" depth="3">
-              Found {{ entities.length }} entities to analyze
-            </n-text>
+              <template #tab>
+                <div class="tab-header">
+                  <n-badge 
+                    :value="tabStates.connection.badge"
+                    :type="tabStates.connection.completed ? 'success' : 'default'"
+                    :show="true"
+                  >
+                    {{ tabStates.connection.title }}
+                  </n-badge>
+                </div>
+              </template>
+              
+              <n-card :bordered="false" class="tab-content">
+                <template #header>
+                  <h2>Connect to Home Assistant</h2>
+                  <n-text depth="3">Establish connection to fetch entity data</n-text>
+                </template>
+                
+                <Suspense>
+                  <ConnectionForm 
+                    :is-connected="isConnected"
+                    :connection-error="connectionError"
+                    :is-auto-connecting="isAutoConnecting"
+                    @connect="handleConnect"
+                    @connection-status="handleConnectionStatus"
+                  />
+                  <template #fallback>
+                    <n-space justify="center" style="padding: 2rem">
+                      <n-spin size="large" />
+                    </n-space>
+                  </template>
+                </Suspense>
+              </n-card>
+            </n-tab-pane>
             
-            <n-alert
-              v-if="!canAnalyze && !isAnalyzing"
-              type="warning"
-              title="Requirements for analysis"
+            <!-- Step 2: Time Periods -->
+            <n-tab-pane 
+              name="periods" 
+              :disabled="tabStates.periods.disabled"
+              class="tab-pane"
             >
-              <n-list>
-                <n-list-item>
-                  <n-tag :type="isConnected ? 'success' : 'error'" size="small">
-                    {{ isConnected ? '✅' : '❌' }}
-                  </n-tag>
-                  Connected to Home Assistant
-                </n-list-item>
-                <n-list-item>
-                  <n-tag :type="periods.filter(p => p.isTruePeriod).length > 0 ? 'success' : 'error'" size="small">
-                    {{ periods.filter(p => p.isTruePeriod).length > 0 ? '✅' : '❌' }}
-                  </n-tag>
-                  At least 1 TRUE period ({{ periods.filter(p => p.isTruePeriod).length }} found)
-                </n-list-item>
-                <n-list-item>
-                  <n-tag :type="periods.filter(p => !p.isTruePeriod).length > 0 ? 'success' : 'error'" size="small">
-                    {{ periods.filter(p => !p.isTruePeriod).length > 0 ? '✅' : '❌' }}
-                  </n-tag>
-                  At least 1 FALSE period ({{ periods.filter(p => !p.isTruePeriod).length }} found)
-                </n-list-item>
-              </n-list>
-            </n-alert>
-          </n-space>
-          
-          <EntityAnalyzer 
-            :analyzed-entities="analyzedEntities"
-            :periods="periods"
-            :is-analyzing="isAnalyzing"
-            :error="analysisError"
-            :total-entities="entities.length"
-            :analysis-progress="analysisProgress"
-            :entity-status-map="entityStatusMap"
-            @entities-selected="handleEntitiesSelected"
-          />
-        </n-card>
-        
-        <n-card
-          v-if="generatedConfig"
-          class="step"
-          :bordered="false"
-        >
-          <template #header>
-            <div class="step-header">
-              <n-tag type="success" round size="large">
-                4
-              </n-tag>
-              <h2>Configuration</h2>
-            </div>
-          </template>
-          <ConfigOutput 
-            :config="generatedConfig"
-            :entity-probabilities="analyzedEntities"
-            :ha-connection="haConnection"
-            :cached-historical-data="cachedHistoricalData"
-            @config-updated="updateGeneratedConfig"
-          />
-        </n-card>
-      </main>
+              <template #tab>
+                <div class="tab-header">
+                  <n-badge 
+                    :value="tabStates.periods.badge"
+                    :type="tabStates.periods.completed ? 'success' : 'default'"
+                    :show="true"
+                  >
+                    {{ tabStates.periods.title }}
+                  </n-badge>
+                </div>
+              </template>
+              
+              <n-card :bordered="false" class="tab-content">
+                <template #header>
+                  <h2>Define Time Periods</h2>
+                  <n-text depth="3">Set when your sensor should be TRUE or FALSE</n-text>
+                </template>
+                
+                <Suspense>
+                  <TimePeriodSelector @periods-updated="handlePeriodsUpdate" />
+                  <template #fallback>
+                    <n-space justify="center" style="padding: 2rem">
+                      <n-spin size="large" />
+                    </n-space>
+                  </template>
+                </Suspense>
+              </n-card>
+            </n-tab-pane>
+            
+            <!-- Step 3: Analysis -->
+            <n-tab-pane 
+              name="analysis" 
+              :disabled="tabStates.analysis.disabled"
+              class="tab-pane"
+            >
+              <template #tab>
+                <div class="tab-header">
+                  <n-badge 
+                    :value="tabStates.analysis.badge"
+                    :type="tabStates.analysis.completed ? 'success' : 'default'"
+                    :show="true"
+                  >
+                    {{ tabStates.analysis.title }}
+                  </n-badge>
+                </div>
+              </template>
+              
+              <n-card :bordered="false" class="tab-content">
+                <template #header>
+                  <h2>Analyze Entities</h2>
+                  <n-text depth="3">Find the best entities for your Bayesian sensor</n-text>
+                </template>
+                
+                <n-space vertical align="center" class="analyze-section">
+                  <n-button
+                    @click="handleAnalyze"
+                    :disabled="!canAnalyze || isAnalyzing"
+                    :loading="isAnalyzing"
+                    type="primary"
+                    size="large"
+                  >
+                    {{ isAnalyzing ? 'Analyzing...' : 'Analyze All Entities' }}
+                  </n-button>
+                  <n-text v-if="entities.length > 0" depth="3">
+                    Found {{ entities.length }} entities to analyze
+                  </n-text>
+                  
+                  <n-alert
+                    v-if="!canAnalyze && !isAnalyzing"
+                    type="warning"
+                    title="Requirements for analysis"
+                  >
+                    <n-list>
+                      <n-list-item>
+                        <n-tag :type="isConnected ? 'success' : 'error'" size="small">
+                          {{ isConnected ? '✅' : '❌' }}
+                        </n-tag>
+                        Connected to Home Assistant
+                      </n-list-item>
+                      <n-list-item>
+                        <n-tag :type="periods.filter(p => p.isTruePeriod).length > 0 ? 'success' : 'error'" size="small">
+                          {{ periods.filter(p => p.isTruePeriod).length > 0 ? '✅' : '❌' }}
+                        </n-tag>
+                        At least 1 TRUE period ({{ periods.filter(p => p.isTruePeriod).length }} found)
+                      </n-list-item>
+                      <n-list-item>
+                        <n-tag :type="periods.filter(p => !p.isTruePeriod).length > 0 ? 'success' : 'error'" size="small">
+                          {{ periods.filter(p => !p.isTruePeriod).length > 0 ? '✅' : '❌' }}
+                        </n-tag>
+                        At least 1 FALSE period ({{ periods.filter(p => !p.isTruePeriod).length }} found)
+                      </n-list-item>
+                    </n-list>
+                  </n-alert>
+                </n-space>
+                
+                <Suspense>
+                  <EntityAnalyzer 
+                    :analyzed-entities="analyzedEntities"
+                    :periods="periods"
+                    :is-analyzing="isAnalyzing"
+                    :error="analysisError"
+                    :total-entities="entities.length"
+                    :analysis-progress="analysisProgress"
+                    :entity-status-map="entityStatusMap"
+                    @entities-selected="handleEntitiesSelected"
+                  />
+                  <template #fallback>
+                    <n-space justify="center" style="padding: 2rem">
+                      <n-spin size="large" />
+                    </n-space>
+                  </template>
+                </Suspense>
+              </n-card>
+            </n-tab-pane>
+            
+            <!-- Step 4: Configuration -->
+            <n-tab-pane 
+              name="config" 
+              :disabled="tabStates.config.disabled"
+              class="tab-pane"
+            >
+              <template #tab>
+                <div class="tab-header">
+                  <n-badge 
+                    :value="tabStates.config.badge"
+                    :type="tabStates.config.completed ? 'success' : 'default'"
+                    :show="true"
+                  >
+                    {{ tabStates.config.title }}
+                  </n-badge>
+                </div>
+              </template>
+              
+              <n-card :bordered="false" class="tab-content">
+                <template #header>
+                  <h2>Configuration & Testing</h2>
+                  <n-text depth="3">Generate YAML config and test with historical data</n-text>
+                </template>
+                
+                <Suspense>
+                  <ConfigOutput 
+                    :config="generatedConfig"
+                    :entity-probabilities="analyzedEntities"
+                    :ha-connection="haConnection"
+                    :cached-historical-data="cachedHistoricalData"
+                    :entity-buffer="entityBuffer"
+                    @config-updated="updateGeneratedConfig"
+                  />
+                  <template #fallback>
+                    <n-space justify="center" style="padding: 2rem">
+                      <n-spin size="large" />
+                    </n-space>
+                  </template>
+                </Suspense>
+              </n-card>
+            </n-tab-pane>
+          </n-tabs>
+        </main>
       </div>
     </n-message-provider>
   </n-config-provider>
@@ -268,203 +388,37 @@ header h1 {
 .analyze-section {
   margin-bottom: 2rem;
   width: 100%;
-}
-
-.entity-selection {
+  padding: 1rem;
   background: #f8f9fa;
   border-radius: 8px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
 }
 
-.entity-selection h3 {
-  margin: 0 0 0.5rem 0;
-  color: #333;
-}
-
-.entity-selection p {
-  margin: 0 0 1.5rem 0;
-  color: #666;
-}
-
-.selection-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 2rem;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.filter-section {
-  flex: 1;
-  min-width: 300px;
-}
-
-.entity-filter {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  margin-bottom: 1rem;
-}
-
-.domain-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.domain-btn {
-  padding: 0.5rem 1rem;
-  border: 2px solid #e0e0e0;
-  background: white;
-  color: #666;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: all 0.3s;
-}
-
-.domain-btn:hover {
-  border-color: #4CAF50;
-}
-
-.domain-btn.active {
-  border-color: #4CAF50;
-  background: #4CAF50;
-  color: white;
-}
-
-.selection-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.select-btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid #ddd;
-  background: white;
-  color: #333;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.3s;
-  white-space: nowrap;
-}
-
-.select-btn:hover {
-  background: #f0f0f0;
-}
-
-.select-btn.recommended {
-  background: #e3f2fd;
-  border-color: #2196f3;
-  color: #1976d2;
-}
-
-.select-btn.recommended:hover {
-  background: #bbdefb;
-}
-
-.entity-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 0.5rem;
-  max-height: 400px;
-  overflow-y: auto;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 1rem;
-  background: white;
-}
-
-.entity-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.entity-item:hover {
-  background: #f8f9fa;
-  border-color: #e0e0e0;
-}
-
-.entity-item input[type="checkbox"] {
-  margin: 0;
-  cursor: pointer;
-}
-
-.entity-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex: 1;
-}
-
-.entity-id {
-  font-family: monospace;
-  font-size: 0.85rem;
-  color: #333;
-  font-weight: 500;
-}
-
-.entity-state {
-  font-size: 0.8rem;
-  color: #666;
-  background: #f0f0f0;
-  padding: 0.2rem 0.5rem;
-  border-radius: 3px;
-  align-self: flex-start;
-}
-
-.entity-domain {
-  font-size: 0.75rem;
-  color: #999;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-
-.selection-summary {
-  margin-top: 1rem;
-  padding: 0.75rem;
-  background: #e8f5e9;
-  border: 1px solid #4CAF50;
-  border-radius: 4px;
-  text-align: center;
-}
-
-.selection-summary p {
-  margin: 0;
-  color: #2e7d32;
-  font-weight: 500;
-}
-
+/* Responsive design for tabs */
 @media (max-width: 768px) {
-  .selection-controls {
-    flex-direction: column;
-    align-items: stretch;
+  .app {
+    padding: 0.5rem;
   }
   
-  .filter-section {
-    min-width: auto;
+  header {
+    padding: 1rem 0;
   }
   
-  .selection-actions {
-    flex-direction: row;
-    justify-content: center;
-    flex-wrap: wrap;
+  header h1 {
+    font-size: 1.8rem;
   }
   
-  .entity-grid {
-    grid-template-columns: 1fr;
+  .main-tabs :deep(.n-tab-pane) {
+    padding: 1rem;
+  }
+  
+  .tab-content h2 {
+    font-size: 1.3rem;
   }
 }
+
+/* Loading state for suspense fallback */
+.tab-content :deep(.n-spin) {
+  color: #18a058;
+}
+
 </style>

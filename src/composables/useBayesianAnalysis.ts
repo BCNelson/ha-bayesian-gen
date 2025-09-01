@@ -1,7 +1,8 @@
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, shallowRef, markRaw } from 'vue'
 import { HomeAssistantAPI } from '../services/homeAssistant'
 import { BayesianCalculator } from '../services/bayesianCalculator'
 import { AnalysisOrchestrator } from '../services/analysisOrchestrator'
+import { StreamingEntityBuffer } from '../services/entityBuffer'
 import type { HAConnection, HAEntity } from '../types/homeAssistant'
 import type { TimePeriod, EntityProbability, BayesianSensorConfig } from '../types/bayesian'
 
@@ -13,16 +14,19 @@ export const useBayesianAnalysis = () => {
   
   const entities = ref<HAEntity[]>([])
   const periods = ref<TimePeriod[]>([])
-  const analyzedEntities = ref<EntityProbability[]>([])
+  const analyzedEntities = shallowRef<EntityProbability[]>([])
   const generatedConfig = ref<BayesianSensorConfig | null>(null)
   
-  // Cache historical data for simulation
-  const cachedHistoricalData = ref<Map<string, any[]>>(new Map())
+  // NEW: Streaming buffer for efficient data storage and transfer
+  const entityBuffer = new StreamingEntityBuffer()
+  
+  // Keep legacy cache for backwards compatibility (will be phased out)
+  const cachedHistoricalData = ref<Map<string, any[]>>(markRaw(new Map()))
   
   const isAnalyzing = ref(false)
   const analysisError = ref<string | null>(null)
   const analysisProgress = ref({ current: 0, total: 0, currentEntity: '' })
-  const entityStatusMap = ref<Map<string, { status: 'queued' | 'fetching' | 'fetched' | 'analyzing' | 'completed' | 'error', message?: string }>>(new Map())
+  const entityStatusMap = shallowRef<Map<string, { status: 'queued' | 'fetching' | 'fetched' | 'analyzing' | 'completed' | 'error', message?: string }>>(markRaw(new Map()))
   
   const calculator = new BayesianCalculator()
   const orchestrator = new AnalysisOrchestrator()
@@ -36,13 +40,19 @@ export const useBayesianAnalysis = () => {
       entityStatusMap.value.set(entityId, status)
     },
     onResult: (newResults) => {
-      // Add new results immediately and sort
-      analyzedEntities.value.push(...newResults)
-      analyzedEntities.value.sort((a, b) => b.discriminationPower - a.discriminationPower)
+      // Add new results immediately and sort - create new array reference for shallow reactivity
+      const currentResults = [...analyzedEntities.value, ...newResults]
+      currentResults.sort((a, b) => b.discriminationPower - a.discriminationPower)
+      analyzedEntities.value = currentResults
     },
     onEntityFetched: (entityId, history) => {
-      // Cache historical data immediately for simulation
+      // NEW: Stream data to efficient buffer
+      entityBuffer.loadEntityHistory(entityId, history)
+      
+      // Keep legacy cache for backwards compatibility
       cachedHistoricalData.value.set(entityId, history)
+      // Trigger reactivity manually since Map is markRaw
+      cachedHistoricalData.value = new Map(cachedHistoricalData.value)
     }
   })
   
@@ -81,14 +91,26 @@ export const useBayesianAnalysis = () => {
   }
   
   const updatePeriods = (newPeriods: TimePeriod[]) => {
+    // Only re-analyze if periods actually changed significantly
+    const periodsChanged = periods.value.length !== newPeriods.length || 
+      periods.value.some((p, i) => {
+        const newP = newPeriods[i]
+        return !newP || p.isTruePeriod !== newP.isTruePeriod || 
+               p.start.getTime() !== newP.start.getTime() || 
+               p.end.getTime() !== newP.end.getTime()
+      })
+      
     periods.value = newPeriods
-    if (analyzedEntities.value.length > 0 && canAnalyze.value) {
+    
+    if (periodsChanged && analyzedEntities.value.length > 0 && canAnalyze.value) {
       analyzeEntities()
     }
   }
   
   const analyzeEntities = async (selectedEntityIds?: string[]) => {
     if (!canAnalyze.value || !haApi.value) return
+    
+    console.log('ANALYSIS DEBUG - Selected entity IDs:', selectedEntityIds)
     
     isAnalyzing.value = true
     analysisError.value = null
@@ -103,6 +125,9 @@ export const useBayesianAnalysis = () => {
         selectedEntityIds
       )
       
+      console.log('ANALYSIS DEBUG - Entities that were actually analyzed:', 
+        [...new Set(results.map(r => r.entityId))])
+      
       // Cache historical data for simulation
       results.forEach(result => {
         if (!cachedHistoricalData.value.has(result.entityId)) {
@@ -112,11 +137,37 @@ export const useBayesianAnalysis = () => {
       
       // Generate final config
       if (results.length > 0) {
+        console.log('CONFIG GENERATION DEBUG - Analysis results:', results.slice(0, 10).map(r => ({
+          entityId: r.entityId,
+          probGivenTrue: r.probGivenTrue,
+          probGivenFalse: r.probGivenFalse,
+          discriminationPower: r.discriminationPower
+        })))
+
+        // DEBUG: Log specific target entity before config generation
+        const targetEntity = 'sensor.0xe406bffffe000eea_pm25'
+        const targetResults = results.filter(r => r.entityId === targetEntity)
+        if (targetResults.length > 0) {
+          console.log(`CONFIG DEBUG - ${targetEntity} probabilities before config generation:`, targetResults.map(r => ({
+            state: r.state,
+            probGivenTrue: r.probGivenTrue,
+            probGivenFalse: r.probGivenFalse,
+            discriminationPower: r.discriminationPower
+          })))
+        }
+        
         const config = calculator.generateBayesianConfig(
           results.slice(0, 10),
           'Bayesian Sensor',
           10
         )
+        
+        console.log('CONFIG GENERATION DEBUG - Generated observations:', config.observations.map(obs => ({
+          entity_id: obs.entity_id,
+          prob_given_true: obs.prob_given_true,
+          prob_given_false: obs.prob_given_false
+        })))
+        
         generatedConfig.value = config
       }
       
@@ -137,7 +188,10 @@ export const useBayesianAnalysis = () => {
     analysisError.value = null
     analysisProgress.value = { current: 0, total: 0, currentEntity: '' }
     entityStatusMap.value.clear()
-    cachedHistoricalData.value.clear()
+    
+    // Clear both buffer and legacy cache
+    entityBuffer.clearAll()
+    cachedHistoricalData.value = markRaw(new Map())
   }
   
   return {
@@ -155,6 +209,7 @@ export const useBayesianAnalysis = () => {
     calculator,
     haConnection,
     cachedHistoricalData,
+    entityBuffer, // NEW: Efficient buffer access
     connectToHA,
     updatePeriods,
     analyzeEntities,

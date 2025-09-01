@@ -190,7 +190,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, shallowRef } from 'vue'
 import { 
   NSpace, 
   NCard, 
@@ -228,7 +228,7 @@ const emit = defineEmits<{
 
 const searchFilter = ref('')
 const minDiscrimination = ref(0.3)
-const selectedEntities = ref<EntityProbability[]>([])
+const selectedEntities = shallowRef<EntityProbability[]>([])
 
 const discriminationOptions = [
   { label: 'All discrimination levels', value: 0 },
@@ -249,6 +249,7 @@ const getStatusType = (status: string) => {
 }
 
 const groupedEntities = computed(() => {
+  // Use a regular Map for better performance in computed
   const groups = new Map<string, {
     entityId: string
     states: EntityProbability[]
@@ -334,6 +335,19 @@ const calculateThresholdBasedProbabilities = (
   const probGivenTrue = trueTotalDuration > 0 ? trueMatchingDuration / trueTotalDuration : 0
   const probGivenFalse = falseTotalDuration > 0 ? falseMatchingDuration / falseTotalDuration : 0
   const discriminationPower = Math.abs(probGivenTrue - probGivenFalse)
+
+  // DEBUG: Log calculations for target entity
+  const targetEntity = 'sensor.0xe406bffffe000eea_pm25'
+  if (entity.entityId === targetEntity) {
+    console.log(`UI CORRECTED PROB DEBUG - ${targetEntity}:`, {
+      rawProbGivenTrue: probGivenTrue,
+      rawProbGivenFalse: probGivenFalse,
+      clampedProbGivenTrue: Math.min(0.99, Math.max(0.01, probGivenTrue)),
+      clampedProbGivenFalse: Math.min(0.99, Math.max(0.01, probGivenFalse)),
+      originalEntityProbTrue: entity.probGivenTrue,
+      originalEntityProbFalse: entity.probGivenFalse
+    })
+  }
 
   return {
     probGivenTrue: Math.min(0.99, Math.max(0.01, probGivenTrue)),

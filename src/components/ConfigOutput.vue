@@ -68,7 +68,8 @@
         <n-card v-if="currentConfig" title="Bayesian Simulation" style="margin-bottom: 1rem">
           <BayesianSimulator 
             :config="currentConfig" 
-            :cached-historical-data="cachedHistoricalData" 
+            :cached-historical-data="cachedHistoricalData"
+            :entity-buffer="entityBuffer"
           />
         </n-card>
       </n-collapse-transition>
@@ -170,6 +171,7 @@ const props = defineProps<{
   entityProbabilities: EntityProbability[]
   haConnection: any
   cachedHistoricalData: Map<string, any[]>
+  entityBuffer?: any // NEW: Buffer for high-performance simulation
 }>()
 
 const emit = defineEmits<{

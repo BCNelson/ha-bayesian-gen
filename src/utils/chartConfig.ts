@@ -9,9 +9,9 @@ export const createBayesianChartOptions = (config: ChartConfig) => ({
     type: 'line',
     height: config.height,
     animations: {
-      enabled: true,
+      enabled: false, // Disable animations for better performance
       easing: 'easeinout',
-      speed: 400
+      speed: 200
     },
     toolbar: {
       show: true,
@@ -85,6 +85,10 @@ export const createBayesianChartOptions = (config: ChartConfig) => ({
   markers: {
     size: 0
   },
+  legend: {
+    show: true,
+    showForSingleSeries: false
+  },
   grid: {
     borderColor: '#e7e7e7',
     row: {
@@ -106,15 +110,17 @@ export const createBayesianChartOptions = (config: ChartConfig) => ({
 })
 
 export const transformSimulationData = (points: Array<{timestamp: Date, probability: number, sensorState: boolean}>) => {
-  const probabilityData = points.map(point => ({
-    x: point.timestamp.getTime(),
-    y: point.probability * 100
-  }))
-
-  const stateData = points.map(point => ({
-    x: point.timestamp.getTime(),
-    y: point.sensorState ? 100 : 0
-  }))
+  // Optimize data transformation for large datasets
+  const dataLength = points.length
+  const probabilityData = new Array(dataLength)
+  const stateData = new Array(dataLength)
+  
+  for (let i = 0; i < dataLength; i++) {
+    const point = points[i]
+    const timestamp = point.timestamp.getTime()
+    probabilityData[i] = { x: timestamp, y: point.probability * 100 }
+    stateData[i] = { x: timestamp, y: point.sensorState ? 100 : 0 }
+  }
 
   return [
     {

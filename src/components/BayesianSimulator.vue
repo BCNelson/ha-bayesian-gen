@@ -147,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent, nextTick, shallowRef } from 'vue'
 import { SimulationService } from '../services/simulationService'
 import { createBayesianChartOptions, transformSimulationData } from '../utils/chartConfig'
 import { formatDate as fmtDate, formatDuration } from '../utils/formatters'
@@ -159,9 +159,13 @@ const VueApexCharts = defineAsyncComponent(() => import('vue3-apexcharts'))
 const props = defineProps<{
   config: BayesianSensorConfig
   cachedHistoricalData: Map<string, any[]>
+  entityBuffer?: any // NEW: Optional buffer for high-performance simulation
 }>()
 
 onUnmounted(() => {
+  if (debounceTimer.value) {
+    window.clearTimeout(debounceTimer.value)
+  }
   simulationService.terminate()
 })
 
@@ -169,14 +173,16 @@ onUnmounted(() => {
 
 const chart = ref<any>(null)
 const simulationService = new SimulationService()
-const simulationResult = ref<SimulationSummary | null>(null)
+const simulationResult = shallowRef<SimulationSummary | null>(null)
 const threshold = computed(() => props.config.probability_threshold)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedTimeRange = ref('24h')
+const simulationInProgress = ref(false)
+const debounceTimer = ref<number | null>(null)
 
 
-const chartSeries = ref([
+const chartSeries = shallowRef([
   {
     name: 'Probability',
     data: [] as Array<{ x: number; y: number }>
@@ -221,18 +227,9 @@ const getTimeRangeFromData = () => {
 }
 
 const runSimulation = async () => {
-  if (!props.config || !props.cachedHistoricalData) return
+  if (!props.config || simulationInProgress.value) return
   
-  // Check if we have data for at least one entity in the config
-  const availableEntities = props.config.observations.filter(obs => 
-    props.cachedHistoricalData.has(obs.entity_id)
-  )
-  
-  if (availableEntities.length === 0) {
-    error.value = 'No historical data available for configured entities. Analysis is still running...'
-    return
-  }
-
+  simulationInProgress.value = true
   isLoading.value = true
   error.value = null
 
@@ -240,28 +237,112 @@ const runSimulation = async () => {
     const { start, end } = getTimeRangeFromData()
     const sampleInterval = getSampleInterval()
     
-    // Serialize reactive objects to plain data before passing to worker
-    const plainConfig = JSON.parse(JSON.stringify({
-      prior: props.config.prior,
-      probability_threshold: props.config.probability_threshold,
-      observations: props.config.observations
-    }))
+    // Check if we should use buffer-based or legacy simulation
+    const shouldUseBuffer = props.entityBuffer && typeof props.entityBuffer.getTransferableBuffers === 'function'
     
-    // Convert Map to plain object to avoid proxy serialization issues
-    const plainCachedData = new Map()
-    for (const [key, value] of props.cachedHistoricalData.entries()) {
-      plainCachedData.set(key, JSON.parse(JSON.stringify(value)))
+    if (shouldUseBuffer) {
+      console.log('Using high-performance buffer simulation')
+      
+      // NEW: High-performance buffer-based simulation
+      const entityIds = props.config.observations.map(obs => obs.entity_id)
+      
+      // Check if all required entities have buffer data
+      const availableEntities = entityIds.filter(entityId => 
+        props.entityBuffer.hasEntity(entityId)
+      )
+      
+      if (availableEntities.length === 0) {
+        error.value = 'No buffer data available for configured entities. Analysis is still running...'
+        return
+      }
+      
+      // Get transferable buffers (zero-copy transfer)
+      const { buffers, metadata } = props.entityBuffer.getTransferableBuffers(availableEntities)
+      
+      if (buffers.length === 0) {
+        error.value = 'No transferable buffer data available'
+        return
+      }
+      
+      console.log(`Transferring ${buffers.length} buffers to worker`)
+      
+      try {
+        // Run efficient buffer simulation
+        simulationResult.value = await simulationService.simulateWithBuffers(
+          props.config.prior,
+          props.config.probability_threshold,
+          props.config.observations.filter(obs => availableEntities.includes(obs.entity_id)),
+          buffers,
+          metadata,
+          { start, end },
+          sampleInterval
+        )
+      } catch (bufferError) {
+        console.warn('Buffer simulation failed, falling back to legacy:', bufferError)
+        
+        // Fallback to legacy simulation
+        const availableEntities = props.config.observations.filter(obs => 
+          props.cachedHistoricalData.has(obs.entity_id)
+        )
+        
+        if (availableEntities.length === 0) {
+          throw new Error('No historical data available for configured entities')
+        }
+
+        const plainConfig = {
+          prior: props.config.prior,
+          probability_threshold: props.config.probability_threshold,
+          observations: props.config.observations.map(obs => ({...obs}))
+        }
+        
+        const plainCachedData = new Map(props.cachedHistoricalData)
+        
+        simulationResult.value = await simulationService.simulate(
+          plainConfig.prior,
+          plainConfig.probability_threshold,
+          plainConfig.observations,
+          plainCachedData,
+          { start, end },
+          sampleInterval
+        )
+      }
+      
+    } else {
+      console.log('Using legacy object-based simulation')
+      
+      // LEGACY: Object-based simulation (fallback)
+      const availableEntities = props.config.observations.filter(obs => 
+        props.cachedHistoricalData.has(obs.entity_id)
+      )
+      
+      if (availableEntities.length === 0) {
+        error.value = 'No historical data available for configured entities. Analysis is still running...'
+        return
+      }
+
+      // Defer heavy serialization work to next tick to prevent blocking
+      await nextTick()
+      
+      // Serialize reactive objects to plain data before passing to worker
+      const plainConfig = {
+        prior: props.config.prior,
+        probability_threshold: props.config.probability_threshold,
+        observations: props.config.observations.map(obs => ({...obs})) // shallow clone
+      }
+      
+      // Convert Map to plain object (still expensive but better than JSON)
+      const plainCachedData = new Map(props.cachedHistoricalData)
+      
+      // Run legacy simulation
+      simulationResult.value = await simulationService.simulate(
+        plainConfig.prior,
+        plainConfig.probability_threshold,
+        plainConfig.observations,
+        plainCachedData,
+        { start, end },
+        sampleInterval
+      )
     }
-    
-    // Run simulation in worker thread
-    simulationResult.value = await simulationService.simulate(
-      plainConfig.prior,
-      plainConfig.probability_threshold,
-      plainConfig.observations,
-      plainCachedData,
-      { start, end },
-      sampleInterval
-    )
 
     updateChart()
   } catch (err) {
@@ -269,6 +350,7 @@ const runSimulation = async () => {
     console.error('Simulation error:', err)
   } finally {
     isLoading.value = false
+    simulationInProgress.value = false
   }
 }
 
@@ -281,7 +363,12 @@ const chartOptions = computed(() =>
 
 const updateChart = () => {
   if (!simulationResult.value) return
-  chartSeries.value = transformSimulationData(simulationResult.value.points)
+  // Use nextTick to defer chart update to prevent blocking
+  nextTick(() => {
+    if (simulationResult.value) {
+      chartSeries.value = transformSimulationData(simulationResult.value.points)
+    }
+  })
 }
 
 
@@ -315,17 +402,29 @@ const getObservationActivePercentage = (entityId: string) => {
   return ((activePoints / totalPoints) * 100).toFixed(1)
 }
 
+// Debounced simulation to prevent excessive runs
+const debouncedRunSimulation = () => {
+  if (debounceTimer.value) {
+    window.clearTimeout(debounceTimer.value)
+  }
+  debounceTimer.value = window.setTimeout(() => {
+    if (props.config && props.cachedHistoricalData.size > 0) {
+      runSimulation()
+    }
+  }, 300) // 300ms debounce
+}
+
 watch(() => props.config, () => {
   if (props.config) {
-    runSimulation()
+    debouncedRunSimulation()
   }
 }, { immediate: true, deep: true })
 
-watch(() => props.cachedHistoricalData, () => {
+watch(() => props.cachedHistoricalData.size, () => {
   if (props.cachedHistoricalData.size > 0) {
-    runSimulation()
+    debouncedRunSimulation()
   }
-}, { deep: true })
+})
 
 onMounted(() => {
   if (props.config && props.cachedHistoricalData.size > 0) {
