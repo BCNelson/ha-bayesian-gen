@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { NConfigProvider, NMessageProvider, NCard, NButton, NSpace, NAlert, NText, NList, NListItem, NTag } from 'naive-ui'
 import { useBayesianAnalysis } from './composables/useBayesianAnalysis'
 import ConnectionForm from './components/ConnectionForm.vue'
 import TimePeriodSelector from './components/TimePeriodSelector.vue'
@@ -81,99 +82,147 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
 </script>
 
 <template>
-  <div class="app">
-    <header>
-      <h1>Home Assistant Bayesian Sensor Generator</h1>
-      <p>Generate optimized Bayesian sensor configurations based on your historical data</p>
-    </header>
-    
-    <main>
-      <div class="step" :class="{ completed: isConnected }">
-        <div class="step-header">
-          <span class="step-number">1</span>
-          <h2>Connect to Home Assistant</h2>
-        </div>
-        <ConnectionForm 
-          :is-connected="isConnected"
-          :connection-error="connectionError"
-          :is-auto-connecting="isAutoConnecting"
-          @connect="handleConnect"
-          @connection-status="handleConnectionStatus"
-        />
-      </div>
+  <n-config-provider>
+    <n-message-provider>
+      <div class="app">
+      <header>
+        <h1>Home Assistant Bayesian Sensor Generator</h1>
+        <n-text depth="3">Generate optimized Bayesian sensor configurations based on your historical data</n-text>
+      </header>
       
-      <div v-if="isConnected" class="step" :class="{ completed: periods.length > 0 }">
-        <div class="step-header">
-          <span class="step-number">2</span>
-          <h2>Define Time Periods</h2>
-        </div>
-        <TimePeriodSelector @periods-updated="handlePeriodsUpdate" />
-      </div>
-      
-      <div v-if="isConnected && periods.length > 0" class="step">
-        <div class="step-header">
-          <span class="step-number">3</span>
-          <h2>Analyze Entities</h2>
-        </div>
+      <main>
+        <n-card
+          class="step"
+          :class="{ completed: isConnected }"
+          :bordered="false"
+        >
+          <template #header>
+            <div class="step-header">
+              <n-tag :type="isConnected ? 'success' : 'default'" round size="large">
+                1
+              </n-tag>
+              <h2>Connect to Home Assistant</h2>
+            </div>
+          </template>
+          <ConnectionForm 
+            :is-connected="isConnected"
+            :connection-error="connectionError"
+            :is-auto-connecting="isAutoConnecting"
+            @connect="handleConnect"
+            @connection-status="handleConnectionStatus"
+          />
+        </n-card>
         
-        <div class="analyze-section">
-          <button 
-            @click="handleAnalyze" 
-            :disabled="!canAnalyze || isAnalyzing"
-            class="analyze-btn"
-          >
-            {{ isAnalyzing ? 'Analyzing...' : 'Analyze All Entities' }}
-          </button>
-          <p v-if="entities.length > 0" class="entity-count">
-            Found {{ entities.length }} entities to analyze
-          </p>
+        <n-card
+          v-if="isConnected"
+          class="step"
+          :class="{ completed: periods.length > 0 }"
+          :bordered="false"
+        >
+          <template #header>
+            <div class="step-header">
+              <n-tag :type="periods.length > 0 ? 'success' : 'default'" round size="large">
+                2
+              </n-tag>
+              <h2>Define Time Periods</h2>
+            </div>
+          </template>
+          <TimePeriodSelector @periods-updated="handlePeriodsUpdate" />
+        </n-card>
+        
+        <n-card
+          v-if="isConnected && periods.length > 0"
+          class="step"
+          :bordered="false"
+        >
+          <template #header>
+            <div class="step-header">
+              <n-tag :type="analyzedEntities.length > 0 ? 'success' : 'default'" round size="large">
+                3
+              </n-tag>
+              <h2>Analyze Entities</h2>
+            </div>
+          </template>
           
-          <!-- Debug info when button is disabled -->
-          <div v-if="!canAnalyze && !isAnalyzing" class="analyze-requirements">
-            <p><strong>Requirements for analysis:</strong></p>
-            <ul>
-              <li :class="{ completed: isConnected }">
-                {{ isConnected ? '✅' : '❌' }} Connected to Home Assistant
-              </li>
-              <li :class="{ completed: periods.filter(p => p.isTruePeriod).length > 0 }">
-                {{ periods.filter(p => p.isTruePeriod).length > 0 ? '✅' : '❌' }} 
-                At least 1 TRUE period ({{ periods.filter(p => p.isTruePeriod).length }} found)
-              </li>
-              <li :class="{ completed: periods.filter(p => !p.isTruePeriod).length > 0 }">
-                {{ periods.filter(p => !p.isTruePeriod).length > 0 ? '✅' : '❌' }} 
-                At least 1 FALSE period ({{ periods.filter(p => !p.isTruePeriod).length }} found)
-              </li>
-            </ul>
-          </div>
-        </div>
+          <n-space vertical align="center" class="analyze-section">
+            <n-button
+              @click="handleAnalyze"
+              :disabled="!canAnalyze || isAnalyzing"
+              :loading="isAnalyzing"
+              type="primary"
+              size="large"
+            >
+              {{ isAnalyzing ? 'Analyzing...' : 'Analyze All Entities' }}
+            </n-button>
+            <n-text v-if="entities.length > 0" depth="3">
+              Found {{ entities.length }} entities to analyze
+            </n-text>
+            
+            <n-alert
+              v-if="!canAnalyze && !isAnalyzing"
+              type="warning"
+              title="Requirements for analysis"
+            >
+              <n-list>
+                <n-list-item>
+                  <n-tag :type="isConnected ? 'success' : 'error'" size="small">
+                    {{ isConnected ? '✅' : '❌' }}
+                  </n-tag>
+                  Connected to Home Assistant
+                </n-list-item>
+                <n-list-item>
+                  <n-tag :type="periods.filter(p => p.isTruePeriod).length > 0 ? 'success' : 'error'" size="small">
+                    {{ periods.filter(p => p.isTruePeriod).length > 0 ? '✅' : '❌' }}
+                  </n-tag>
+                  At least 1 TRUE period ({{ periods.filter(p => p.isTruePeriod).length }} found)
+                </n-list-item>
+                <n-list-item>
+                  <n-tag :type="periods.filter(p => !p.isTruePeriod).length > 0 ? 'success' : 'error'" size="small">
+                    {{ periods.filter(p => !p.isTruePeriod).length > 0 ? '✅' : '❌' }}
+                  </n-tag>
+                  At least 1 FALSE period ({{ periods.filter(p => !p.isTruePeriod).length }} found)
+                </n-list-item>
+              </n-list>
+            </n-alert>
+          </n-space>
+          
+          <EntityAnalyzer 
+            :analyzed-entities="analyzedEntities"
+            :periods="periods"
+            :is-analyzing="isAnalyzing"
+            :error="analysisError"
+            :total-entities="entities.length"
+            :analysis-progress="analysisProgress"
+            :entity-status-map="entityStatusMap"
+            @entities-selected="handleEntitiesSelected"
+          />
+        </n-card>
         
-        <EntityAnalyzer 
-          :analyzed-entities="analyzedEntities"
-          :periods="periods"
-          :is-analyzing="isAnalyzing"
-          :error="analysisError"
-          :total-entities="entities.length"
-          :analysis-progress="analysisProgress"
-          :entity-status-map="entityStatusMap"
-          @entities-selected="handleEntitiesSelected"
-        />
+        <n-card
+          v-if="generatedConfig"
+          class="step"
+          :bordered="false"
+        >
+          <template #header>
+            <div class="step-header">
+              <n-tag type="success" round size="large">
+                4
+              </n-tag>
+              <h2>Configuration</h2>
+            </div>
+          </template>
+          <ConfigOutput 
+            :config="generatedConfig"
+            :entity-probabilities="analyzedEntities"
+            :ha-connection="haConnection"
+            :cached-historical-data="cachedHistoricalData"
+            @config-updated="updateGeneratedConfig"
+          />
+        </n-card>
+      </main>
       </div>
-      
-      <div v-if="generatedConfig" class="step">
-        <div class="step-header">
-          <span class="step-number">4</span>
-          <h2>Configuration</h2>
-        </div>
-        <ConfigOutput 
-          :config="generatedConfig"
-          :entity-probabilities="analyzedEntities"
-          :ha-connection="haConnection"
-          :cached-historical-data="cachedHistoricalData"
-          @config-updated="updateGeneratedConfig"
-        />
-      </div>
-    </main>
-  </div>
+    </n-message-provider>
+  </n-config-provider>
 </template>
 
 <style scoped>
@@ -195,47 +244,20 @@ header h1 {
   margin-bottom: 0.5rem;
 }
 
-header p {
-  color: #666;
-  font-size: 1.1rem;
-}
-
 .step {
-  margin-bottom: 3rem;
-  padding: 2rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
+  margin-bottom: 2rem;
   transition: all 0.3s ease;
 }
 
-.step.completed {
-  border-color: #4CAF50;
-  background: rgba(76, 175, 80, 0.05);
+.step.completed :deep(.n-card) {
+  border-color: #18a058;
+  background: rgba(24, 160, 88, 0.05);
 }
 
 .step-header {
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.step-number {
-  width: 40px;
-  height: 40px;
-  background: #f0f0f0;
-  color: #666;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 1.2rem;
-}
-
-.step.completed .step-number {
-  background: #4CAF50;
-  color: white;
 }
 
 .step-header h2 {
@@ -245,60 +267,7 @@ header p {
 
 .analyze-section {
   margin-bottom: 2rem;
-  text-align: center;
-}
-
-.analyze-btn {
-  padding: 1rem 2rem;
-  background: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1.1rem;
-  cursor: pointer;
-  transition: background 0.3s;
-  margin-bottom: 1rem;
-}
-
-.analyze-btn:hover:not(:disabled) {
-  background: #45a049;
-}
-
-.analyze-btn:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-
-.entity-count {
-  color: #666;
-  margin: 0;
-}
-
-.analyze-requirements {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 4px;
-  border-left: 4px solid #ffc107;
-}
-
-.analyze-requirements p {
-  margin: 0 0 0.5rem 0;
-  color: #333;
-}
-
-.analyze-requirements ul {
-  margin: 0;
-  padding-left: 1.5rem;
-}
-
-.analyze-requirements li {
-  margin: 0.25rem 0;
-  color: #666;
-}
-
-.analyze-requirements li.completed {
-  color: #28a745;
+  width: 100%;
 }
 
 .entity-selection {

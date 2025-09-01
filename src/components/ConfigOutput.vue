@@ -1,117 +1,167 @@
 <template>
-  <div class="config-output">
-    <h2>Generated Configuration</h2>
+  <n-space vertical size="large">
+    <n-empty v-if="!config" description="No configuration generated yet">
+      <template #extra>
+        <n-text depth="3">Complete the analysis first.</n-text>
+      </template>
+    </n-empty>
 
-    <div v-if="!config" class="no-config">
-      <p>No configuration generated yet. Complete the analysis first.</p>
-    </div>
+    <template v-else>
+      <n-card>
+        <n-grid :cols="4" :x-gap="12" :y-gap="12" responsive="screen">
+          <n-form-item-gi label="Sensor Name">
+            <n-input v-model:value="sensorName" @update:value="updateConfig" />
+          </n-form-item-gi>
 
-    <div v-else>
-      <div class="config-header">
-        <div class="config-settings">
-          <div class="setting-group">
-            <label for="sensor-name">Sensor Name:</label>
-            <input id="sensor-name" v-model="sensorName" type="text" @input="updateConfig" />
-          </div>
+          <n-form-item-gi label="Prior Probability">
+            <n-input-number 
+              v-model:value="prior" 
+              :min="0.01" 
+              :max="0.99" 
+              :step="0.01"
+              @update:value="updateConfig"
+            />
+          </n-form-item-gi>
 
-          <div class="setting-group">
-            <label for="prior">Prior Probability:</label>
-            <input id="prior" v-model.number="prior" type="number" min="0.01" max="0.99" step="0.01"
-              @input="updateConfig" />
-            <small>Initial probability (0.01-0.99)</small>
-          </div>
+          <n-form-item-gi label="Probability Threshold">
+            <n-input-number 
+              v-model:value="threshold" 
+              :min="0.01" 
+              :max="0.99" 
+              :step="0.01"
+              @update:value="updateConfig"
+            />
+          </n-form-item-gi>
 
-          <div class="setting-group">
-            <label for="threshold">Probability Threshold:</label>
-            <input id="threshold" v-model.number="threshold" type="number" min="0.01" max="0.99" step="0.01"
-              @input="updateConfig" />
-            <small>Activation threshold (0.01-0.99)</small>
-          </div>
+          <n-form-item-gi label="Max Observations">
+            <n-select
+              v-model:value="maxObservations"
+              :options="maxObsOptions"
+              @update:value="updateConfig"
+            />
+          </n-form-item-gi>
+        </n-grid>
 
-          <div class="setting-group">
-            <label for="max-observations">Max Observations:</label>
-            <select id="max-observations" v-model.number="maxObservations" @change="updateConfig">
-              <option value="5">Top 5</option>
-              <option value="10">Top 10</option>
-              <option value="15">Top 15</option>
-              <option value="20">Top 20</option>
-            </select>
-          </div>
-        </div>
+        <template #action>
+          <n-space>
+            <n-button type="primary" @click="copyToClipboard">
+              {{ copyText }}
+            </n-button>
+            <n-button type="info" @click="downloadConfig">
+              Download YAML
+            </n-button>
+            <n-button type="tertiary" @click="toggleSimulator">
+              {{ showSimulator ? 'Hide' : 'Show' }} Simulation
+            </n-button>
+          </n-space>
+        </template>
+      </n-card>
 
-        <div class="actions">
-          <button @click="copyToClipboard" class="btn btn-primary">
-            {{ copyText }}
-          </button>
-          <button @click="downloadConfig" class="btn btn-secondary">
-            Download YAML
-          </button>
-          <button @click="toggleSimulator" class="btn btn-accent">
-            {{ showSimulator ? 'Hide' : 'Show' }} Simulation
-          </button>
-        </div>
-      </div>
+      <n-card title="Configuration Preview">
+        <n-space>
+          <n-tag type="info">{{ currentConfig?.observations.length || 0 }} observations</n-tag>
+          <n-tag type="success">Discrimination: {{ discriminationRange }}</n-tag>
+        </n-space>
+      </n-card>
 
-      <div class="config-preview">
-        <h3>Configuration Preview</h3>
-        <div class="config-stats">
-          <span>{{ currentConfig?.observations.length || 0 }} observations</span>
-          <span>Discrimination range: {{ discriminationRange }}</span>
-        </div>
-      </div>
+      <n-collapse-transition :show="showSimulator && !!currentConfig">
+        <n-card v-if="currentConfig" title="Bayesian Simulation" style="margin-bottom: 1rem">
+          <BayesianSimulator 
+            :config="currentConfig" 
+            :cached-historical-data="cachedHistoricalData" 
+          />
+        </n-card>
+      </n-collapse-transition>
 
-      <div v-if="showSimulator && currentConfig" class="simulator-section">
-        <BayesianSimulator 
-          :config="currentConfig" 
-          :cached-historical-data="cachedHistoricalData" 
+      <n-card v-show="!showSimulator" title="YAML Configuration">
+        <n-code 
+          :code="yamlOutput" 
+          language="yaml" 
+          show-line-numbers
         />
-      </div>
+      </n-card>
 
-      <div v-show="!showSimulator" class="yaml-output">
-        <pre><code class="language-yaml" v-html="highlightedYaml"></code></pre>
-      </div>
-
-      <div class="observations-details">
-        <h3>Observation Details</h3>
-        <div class="observation-cards">
-          <div v-for="(obs, index) in currentConfig?.observations || []" :key="index" class="observation-card">
-            <div class="obs-header">
-              <span class="obs-entity">{{ obs.entity_id }}</span>
-              <span class="obs-platform">{{ obs.platform }}</span>
-            </div>
-            <div class="obs-condition">
-              <span v-if="obs.to_state">State: {{ obs.to_state }}</span>
-              <span v-if="obs.above !== undefined && obs.below !== undefined">
-                Range: {{ obs.above }} - {{ obs.below }}
-              </span>
-            </div>
-            <div class="obs-probabilities">
-              <div class="prob-item">
-                <span>True: {{ (obs.prob_given_true * 100).toFixed(1) }}%</span>
-                <div class="prob-bar">
-                  <div class="prob-fill true-fill" :style="{ width: `${obs.prob_given_true * 100}%` }"></div>
-                </div>
-              </div>
-              <div class="prob-item">
-                <span>False: {{ (obs.prob_given_false * 100).toFixed(1) }}%</span>
-                <div class="prob-bar">
-                  <div class="prob-fill false-fill" :style="{ width: `${obs.prob_given_false * 100}%` }"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+      <n-card title="Observation Details">
+        <n-grid :cols="2" :x-gap="12" :y-gap="12" responsive="screen">
+          <n-grid-item v-for="(obs, index) in currentConfig?.observations || []" :key="index">
+            <n-card size="small">
+              <template #header>
+                <n-space justify="space-between" align="center">
+                  <n-ellipsis style="max-width: 200px">
+                    <n-text code>{{ obs.entity_id }}</n-text>
+                  </n-ellipsis>
+                  <n-tag size="small" :bordered="false">{{ obs.platform }}</n-tag>
+                </n-space>
+              </template>
+              
+              <n-space vertical size="small">
+                <n-text depth="3">
+                  <template v-if="obs.to_state">State: {{ obs.to_state }}</template>
+                  <template v-if="obs.above !== undefined && obs.below !== undefined">
+                    Range: {{ obs.above }} - {{ obs.below }}
+                  </template>
+                </n-text>
+                
+                <n-space vertical size="small">
+                  <div>
+                    <n-text style="display: inline-block; width: 60px">True:</n-text>
+                    <n-progress
+                      type="line"
+                      :percentage="Math.round(obs.prob_given_true * 100)"
+                      :height="16"
+                      :border-radius="8"
+                      :fill-border-radius="8"
+                      status="success"
+                      style="width: calc(100% - 65px); display: inline-block; vertical-align: middle"
+                    />
+                    <n-text style="margin-left: 8px">{{ (obs.prob_given_true * 100).toFixed(1) }}%</n-text>
+                  </div>
+                  
+                  <div>
+                    <n-text style="display: inline-block; width: 60px">False:</n-text>
+                    <n-progress
+                      type="line"
+                      :percentage="Math.round(obs.prob_given_false * 100)"
+                      :height="16"
+                      :border-radius="8"
+                      :fill-border-radius="8"
+                      status="error"
+                      style="width: calc(100% - 65px); display: inline-block; vertical-align: middle"
+                    />
+                    <n-text style="margin-left: 8px">{{ (obs.prob_given_false * 100).toFixed(1) }}%</n-text>
+                  </div>
+                </n-space>
+              </n-space>
+            </n-card>
+          </n-grid-item>
+        </n-grid>
+      </n-card>
+    </template>
+  </n-space>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { stringify as yamlStringify } from 'yaml'
-import Prism from 'prismjs'
-import 'prismjs/components/prism-yaml'
-import 'prismjs/themes/prism-tomorrow.css'
+import { 
+  NSpace, 
+  NCard, 
+  NButton,
+  NInput,
+  NInputNumber,
+  NSelect,
+  NCode,
+  NEmpty,
+  NText,
+  NTag,
+  NGrid,
+  NGridItem,
+  NFormItemGi,
+  NProgress,
+  NEllipsis,
+  NCollapseTransition,
+  useMessage
+} from 'naive-ui'
 import BayesianSimulator from './BayesianSimulator.vue'
 import type { BayesianSensorConfig, EntityProbability } from '../types/bayesian'
 
@@ -126,12 +176,21 @@ const emit = defineEmits<{
   configUpdated: [config: BayesianSensorConfig]
 }>()
 
+const message = useMessage()
+
 const sensorName = ref('Bayesian Sensor')
 const prior = ref(0.5)
 const threshold = ref(0.5)
 const maxObservations = ref(10)
 const copyText = ref('Copy YAML')
 const showSimulator = ref(false)
+
+const maxObsOptions = [
+  { label: 'Top 5', value: 5 },
+  { label: 'Top 10', value: 10 },
+  { label: 'Top 15', value: 15 },
+  { label: 'Top 20', value: 20 }
+]
 
 const currentConfig = computed(() => {
   if (!props.config) return null
@@ -181,11 +240,6 @@ const yamlOutput = computed(() => {
   })
 })
 
-const highlightedYaml = computed(() => {
-  if (!yamlOutput.value) return ''
-  return Prism.highlight(yamlOutput.value, Prism.languages.yaml, 'yaml')
-})
-
 const discriminationRange = computed(() => {
   if (!props.entityProbabilities || props.entityProbabilities.length === 0) return 'N/A'
 
@@ -213,15 +267,14 @@ const copyToClipboard = async () => {
   try {
     await navigator.clipboard.writeText(yamlOutput.value)
     copyText.value = 'Copied!'
+    message.success('Configuration copied to clipboard!')
     setTimeout(() => {
       copyText.value = 'Copy YAML'
     }, 2000)
   } catch (error) {
     console.error('Failed to copy to clipboard:', error)
-    copyText.value = 'Copy failed'
-    setTimeout(() => {
-      copyText.value = 'Copy YAML'
-    }, 2000)
+    message.error('Failed to copy to clipboard')
+    copyText.value = 'Copy YAML'
   }
 }
 
@@ -235,6 +288,7 @@ const downloadConfig = () => {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+  message.success('Configuration downloaded!')
 }
 
 const toggleSimulator = () => {
@@ -243,257 +297,4 @@ const toggleSimulator = () => {
 </script>
 
 <style scoped>
-
-.config-output {
-  max-width: 1200px;
-  margin: 2rem auto;
-}
-
-h2 {
-  color: #333;
-  margin-bottom: 1.5rem;
-}
-
-.no-config {
-  background: #f5f5f5;
-  padding: 2rem;
-  border-radius: 8px;
-  text-align: center;
-  color: #666;
-}
-
-.config-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 8px;
-  gap: 2rem;
-}
-
-.config-settings {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  flex: 1;
-}
-
-.setting-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.setting-group label {
-  font-weight: 500;
-  margin-bottom: 0.25rem;
-  color: #555;
-}
-
-.setting-group input,
-.setting-group select {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.95rem;
-}
-
-.setting-group small {
-  margin-top: 0.25rem;
-  color: #777;
-  font-size: 0.8rem;
-}
-
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.copy-btn,
-.download-btn,
-.simulate-btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background 0.3s;
-}
-
-.copy-btn {
-  background: #4CAF50;
-  color: white;
-}
-
-.copy-btn:hover {
-  background: #45a049;
-}
-
-.download-btn {
-  background: #2196F3;
-  color: white;
-}
-
-.download-btn:hover {
-  background: #1976D2;
-}
-
-.simulate-btn {
-  background: #9C27B0;
-  color: white;
-}
-
-.simulate-btn:hover {
-  background: #7B1FA2;
-}
-
-.config-preview {
-  margin-bottom: 1rem;
-}
-
-.config-preview h3 {
-  margin-bottom: 0.5rem;
-  color: #333;
-}
-
-.config-stats {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.yaml-output {
-  margin-bottom: 2rem;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid #3c3c3c;
-}
-
-.yaml-output pre {
-  margin: 0 !important;
-  padding: 1rem !important;
-  white-space: pre;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  text-align: left;
-  max-height: 600px;
-  overflow: auto;
-  background: #2d2d2d !important;
-}
-
-.yaml-output code {
-  background: transparent !important;
-  padding: 0 !important;
-  border-radius: 0;
-  text-align: left;
-  display: block;
-  font-family: inherit;
-}
-
-.observations-details h3 {
-  margin-bottom: 1rem;
-  color: #333;
-}
-
-.observation-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
-}
-
-.observation-card {
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.obs-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.obs-entity {
-  font-family: monospace;
-  font-size: 0.85rem;
-  color: #555;
-  word-break: break-all;
-}
-
-.obs-platform {
-  background: #e3f2fd;
-  color: #1976d2;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.obs-condition {
-  margin-bottom: 0.75rem;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.obs-probabilities {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.prob-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.prob-item span {
-  min-width: 80px;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.prob-bar {
-  flex: 1;
-  height: 16px;
-  background: #f0f0f0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.prob-fill {
-  height: 100%;
-  border-radius: 8px;
-  transition: width 0.3s ease;
-}
-
-.true-fill {
-  background: linear-gradient(90deg, #4CAF50, #66BB6A);
-}
-
-.false-fill {
-  background: linear-gradient(90deg, #f44336, #ef5350);
-}
-
-.simulator-section {
-  margin-bottom: 2rem;
-}
-
-@media (max-width: 768px) {
-  .config-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .actions {
-    flex-direction: row;
-    justify-content: center;
-  }
-}
 </style>

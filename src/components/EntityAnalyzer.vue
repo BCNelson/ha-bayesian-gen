@@ -1,49 +1,63 @@
 <template>
-  <div class="entity-analyzer">
-    <h2>Entity Analysis Results</h2>
-    
-    <div v-if="isAnalyzing" class="analyzing">
-      <div class="progress-header">
-        <div class="spinner"></div>
-        <p>Analyzing entity states across time periods...</p>
-      </div>
-      <div v-if="analysisProgress.total > 0" class="progress-info">
-        <div class="progress-bar">
-          <div 
-            class="progress-fill" 
-            :style="{ width: `${(analysisProgress.current / analysisProgress.total) * 100}%` }"
-          ></div>
-        </div>
-        <p class="progress-text">
+  <n-space vertical size="large">
+    <div v-if="isAnalyzing">
+      <n-space vertical align="center">
+        <n-spin size="large" />
+        <n-text>Analyzing entity states across time periods...</n-text>
+      </n-space>
+      
+      <n-progress
+        v-if="analysisProgress.total > 0"
+        type="line"
+        :percentage="Math.round((analysisProgress.current / analysisProgress.total) * 100)"
+        :show-indicator="false"
+        style="margin: 1rem 0"
+      />
+      
+      <n-space justify="center" style="margin-bottom: 1rem">
+        <n-text depth="3">
           Processing {{ analysisProgress.current }} / {{ analysisProgress.total }} entities
-        </p>
-        <p v-if="analysisProgress.currentEntity" class="current-entity">
-          Current: {{ analysisProgress.currentEntity }}
-        </p>
-      </div>
+        </n-text>
+      </n-space>
+      
+      <n-text 
+        v-if="analysisProgress.currentEntity" 
+        depth="3"
+        tag="div"
+        style="text-align: center; font-family: monospace; font-size: 0.9rem"
+      >
+        Current: {{ analysisProgress.currentEntity }}
+      </n-text>
       
       <!-- Show completed results immediately during analysis -->
-      <div v-if="analyzedEntities.length > 0" class="analysis-summary">
-        <p>Found <strong>{{ analyzedEntities.length }}</strong> state combinations from <strong>{{ analysisProgress.current }}</strong> completed entities</p>
-        <p><em>Results appear as entities are analyzed. Analysis continues in the background...</em></p>
-      </div>
+      <n-alert 
+        v-if="analyzedEntities.length > 0" 
+        type="info"
+        style="margin: 1.5rem 0"
+      >
+        <n-text>Found </n-text>
+        <n-text strong>{{ analyzedEntities.length }}</n-text>
+        <n-text> state combinations from </n-text>
+        <n-text strong>{{ analysisProgress.current }}</n-text>
+        <n-text> completed entities</n-text>
+        <br />
+        <n-text italic depth="3">Results appear as entities are analyzed. Analysis continues in the background...</n-text>
+      </n-alert>
       
       <!-- Filter controls available during analysis -->
-      <div v-if="analyzedEntities.length > 0" class="filter-controls">
-        <input
-          v-model="searchFilter"
-          type="text"
+      <n-space v-if="analyzedEntities.length > 0" style="margin-bottom: 1.5rem">
+        <n-input
+          v-model:value="searchFilter"
           placeholder="Filter entities..."
-          class="search-input"
+          clearable
+          style="flex: 1"
         />
-        <select v-model="minDiscrimination" class="discrimination-filter">
-          <option value="0">All discrimination levels</option>
-          <option value="0.1">Min 10% difference</option>
-          <option value="0.3">Min 30% difference</option>
-          <option value="0.5">Min 50% difference</option>
-          <option value="0.7">Min 70% difference</option>
-        </select>
-      </div>
+        <n-select
+          v-model:value="minDiscrimination"
+          :options="discriminationOptions"
+          style="width: 200px"
+        />
+      </n-space>
       
       <!-- Show analyzed entities as they come in -->
       <div v-if="filteredEntities.length > 0" class="entity-cards">
@@ -57,46 +71,65 @@
       </div>
       
       <!-- Show status cards for entities not yet analyzed -->
-      <div v-if="pendingEntityStatusMap.size > 0" class="pending-entities">
-        <h3>Processing Queue</h3>
-        <div class="entity-status-grid">
-          <div v-for="[entityId, status] in pendingEntityStatusMap" 
-               :key="entityId"
-               class="entity-status-item"
-               :class="status.status">
-            <span class="entity-id">{{ entityId }}</span>
-            <span class="entity-status">{{ status.status }}</span>
-          </div>
-        </div>
-      </div>
+      <n-card v-if="pendingEntityStatusMap.size > 0" title="Processing Queue" style="margin-top: 2rem">
+        <n-grid :cols="3" :x-gap="8" :y-gap="8" responsive="screen" style="max-height: 200px; overflow-y: auto">
+          <n-grid-item 
+            v-for="[entityId, status] in pendingEntityStatusMap" 
+            :key="entityId"
+            :span="1"
+          >
+            <n-tag
+              :type="getStatusType(status.status)"
+              style="width: 100%"
+            >
+              <n-ellipsis style="max-width: 150px">
+                {{ entityId }}
+              </n-ellipsis>
+              <template #icon>
+                <n-text depth="3" style="margin-left: 0.5rem">
+                  {{ status.status }}
+                </n-text>
+              </template>
+            </n-tag>
+          </n-grid-item>
+        </n-grid>
+      </n-card>
     </div>
     
-    <div v-else-if="error" class="error">
+    <n-alert v-else-if="error" type="error">
       {{ error }}
-    </div>
+    </n-alert>
     
     <div v-else-if="analyzedEntities.length > 0">
-      <div class="analysis-summary">
-        <p>Analyzed <strong>{{ totalEntities }}</strong> entities across <strong>{{ periods.length }}</strong> time periods</p>
-        <p>Found <strong>{{ groupedEntities.length }}</strong> entities with <strong>{{ analyzedEntities.length }}</strong> total state combinations</p>
-        <p><em>Entities are grouped by ID. Each entity may have multiple states that behave differently during your TRUE/FALSE periods.</em></p>
-      </div>
+      <n-alert type="info" style="margin-bottom: 1.5rem">
+        <n-text>Analyzed </n-text>
+        <n-text strong>{{ totalEntities }}</n-text>
+        <n-text> entities across </n-text>
+        <n-text strong>{{ periods.length }}</n-text>
+        <n-text> time periods</n-text>
+        <br />
+        <n-text>Found </n-text>
+        <n-text strong>{{ groupedEntities.length }}</n-text>
+        <n-text> entities with </n-text>
+        <n-text strong>{{ analyzedEntities.length }}</n-text>
+        <n-text> total state combinations</n-text>
+        <br />
+        <n-text italic depth="3">Entities are grouped by ID. Each entity may have multiple states that behave differently during your TRUE/FALSE periods.</n-text>
+      </n-alert>
       
-      <div class="filter-controls">
-        <input
-          v-model="searchFilter"
-          type="text"
+      <n-space style="margin-bottom: 1.5rem">
+        <n-input
+          v-model:value="searchFilter"
           placeholder="Filter entities..."
-          class="search-input"
+          clearable
+          style="flex: 1"
         />
-        <select v-model="minDiscrimination" class="discrimination-filter">
-          <option value="0">All discrimination levels</option>
-          <option value="0.1">Min 10% difference</option>
-          <option value="0.3">Min 30% difference</option>
-          <option value="0.5">Min 50% difference</option>
-          <option value="0.7">Min 70% difference</option>
-        </select>
-      </div>
+        <n-select
+          v-model:value="minDiscrimination"
+          :options="discriminationOptions"
+          style="width: 200px"
+        />
+      </n-space>
       
       <div class="entity-cards">
         <EntityCard
@@ -108,42 +141,74 @@
         />
       </div>
       
-      <div class="entity-selection-controls">
-        <div class="selection-header">
-          <h3>Select Entities for Bayesian Configuration</h3>
-          <p>Click on entities above or use the buttons below to select which entities to include in your final Bayesian sensor configuration.</p>
-        </div>
+      <n-card style="margin-top: 2rem">
+        <template #header>
+          <n-text strong>Select Entities for Bayesian Configuration</n-text>
+        </template>
+        <n-text depth="3" style="display: block; margin-bottom: 1.5rem">
+          Click on entities above or use the buttons below to select which entities to include in your final Bayesian sensor configuration.
+        </n-text>
         
-        <div class="selection-actions">
-          <button @click="selectTop(5)" class="select-btn">Select Top 5</button>
-          <button @click="selectTop(10)" class="select-btn recommended">Select Top 10</button>
-          <button @click="selectTop(20)" class="select-btn">Select Top 20</button>
-          <button @click="selectAll" class="select-btn">Select All Visible</button>
-          <button @click="selectNone" class="select-btn">Clear Selection</button>
-        </div>
+        <n-space style="margin-bottom: 1.5rem">
+          <n-button @click="selectTop(5)">Select Top 5</n-button>
+          <n-button @click="selectTop(10)" type="info">Select Top 10 (Recommended)</n-button>
+          <n-button @click="selectTop(20)">Select Top 20</n-button>
+          <n-button @click="selectAll">Select All Visible</n-button>
+          <n-button @click="selectNone">Clear Selection</n-button>
+        </n-space>
         
-        <div v-if="selectedEntities.length > 0" class="selection-summary">
-          <p><strong>{{ selectedEntities.length }}</strong> entities selected for configuration</p>
-          <button @click="generateConfig" class="generate-btn">
+        <n-alert 
+          v-if="selectedEntities.length > 0" 
+          type="success"
+          style="text-align: center"
+        >
+          <n-text strong>{{ selectedEntities.length }}</n-text>
+          <n-text> entities selected for configuration</n-text>
+          <br />
+          <n-button 
+            @click="generateConfig" 
+            type="primary"
+            size="large"
+            style="margin-top: 1rem"
+          >
             Generate Bayesian Configuration
-          </button>
-        </div>
-      </div>
+          </n-button>
+        </n-alert>
+      </n-card>
     </div>
     
-    <div v-else class="no-results">
-      <p>No analysis results yet. Please:</p>
-      <ol>
-        <li>Connect to Home Assistant</li>
-        <li>Add at least one TRUE and one FALSE time period</li>
-        <li>Click "Analyze Entities"</li>
-      </ol>
-    </div>
-  </div>
+    <n-empty v-else description="No analysis results yet">
+      <template #extra>
+        <n-ol>
+          <n-li>Connect to Home Assistant</n-li>
+          <n-li>Add at least one TRUE and one FALSE time period</n-li>
+          <n-li>Click "Analyze Entities"</n-li>
+        </n-ol>
+      </template>
+    </n-empty>
+  </n-space>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { 
+  NSpace, 
+  NCard, 
+  NAlert, 
+  NText, 
+  NButton,
+  NInput,
+  NSelect,
+  NProgress,
+  NSpin,
+  NEmpty,
+  NGrid,
+  NGridItem,
+  NTag,
+  NEllipsis,
+  NOl,
+  NLi
+} from 'naive-ui'
 import type { EntityProbability, TimePeriod } from '../types/bayesian'
 import EntityCard from './EntityCard.vue'
 
@@ -164,6 +229,24 @@ const emit = defineEmits<{
 const searchFilter = ref('')
 const minDiscrimination = ref(0.3)
 const selectedEntities = ref<EntityProbability[]>([])
+
+const discriminationOptions = [
+  { label: 'All discrimination levels', value: 0 },
+  { label: 'Min 10% difference', value: 0.1 },
+  { label: 'Min 30% difference', value: 0.3 },
+  { label: 'Min 50% difference', value: 0.5 },
+  { label: 'Min 70% difference', value: 0.7 }
+]
+
+const getStatusType = (status: string) => {
+  switch (status) {
+    case 'analyzing': return 'success'
+    case 'fetching': return 'info'
+    case 'fetched': return 'warning'
+    case 'error': return 'error'
+    default: return 'default'
+  }
+}
 
 const groupedEntities = computed(() => {
   const groups = new Map<string, {
@@ -366,301 +449,14 @@ const generateConfig = () => {
 </script>
 
 <style scoped>
-.entity-analyzer {
-  max-width: 1200px;
-  margin: 2rem auto;
-}
-
-h2 {
-  color: #333;
-  margin-bottom: 1.5rem;
-}
-
-
-.progress-header {
-  text-align: center;
-  margin-bottom: 1.5rem;
-}
-
-.spinner {
-  width: 30px;
-  height: 30px;
-  margin: 0 auto 1rem;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #4CAF50;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.progress-info {
-  margin-top: 1.5rem;
-  max-width: 400px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.progress-bar {
-  width: 100%;
-  height: 8px;
-  background: #f0f0f0;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #4CAF50, #66BB6A);
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  font-size: 0.9rem;
-  color: #666;
-  margin: 0.5rem 0;
-}
-
-.current-entity {
-  font-size: 0.8rem;
-  color: #999;
-  font-family: monospace;
-  margin: 0.25rem 0;
-  word-break: break-all;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Entity cards grid is used for both analysis and results */
-
-.error {
-  padding: 1rem;
-  background: #ffebee;
-  color: #c62828;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-}
-
-.analysis-summary {
-  background: #e3f2fd;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1.5rem;
-}
-
-.analysis-summary p {
-  margin: 0.25rem 0;
-  color: #1976d2;
-}
-
-.filter-controls {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.search-input,
-.discrimination-filter {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.95rem;
-}
-
-.search-input {
-  flex: 1;
-}
-
 .entity-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
   gap: 1.5rem;
 }
 
-.no-results {
-  background: #f5f5f5;
-  padding: 2rem;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.no-results ol {
-  text-align: left;
-  display: inline-block;
-  margin-top: 1rem;
-}
-
-
-.entity-selection-controls {
-  margin-top: 2rem;
-  padding: 1.5rem;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 2px solid #e0e0e0;
-}
-
-.selection-header h3 {
-  margin: 0 0 0.5rem 0;
-  color: #333;
-}
-
-.selection-header p {
-  margin: 0 0 1.5rem 0;
-  color: #666;
-  line-height: 1.4;
-}
-
-.selection-actions {
-  display: flex;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.select-btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid #ddd;
-  background: white;
-  color: #333;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.3s;
-  white-space: nowrap;
-}
-
-.select-btn:hover {
-  background: #f0f0f0;
-  border-color: #bbb;
-}
-
-.select-btn.recommended {
-  background: #e3f2fd;
-  border-color: #2196f3;
-  color: #1976d2;
-  font-weight: 500;
-}
-
-.select-btn.recommended:hover {
-  background: #bbdefb;
-  border-color: #1976d2;
-}
-
-.selection-summary {
-  text-align: center;
-  padding: 1rem;
-  background: #e8f5e9;
-  border: 1px solid #4CAF50;
-  border-radius: 4px;
-}
-
-.selection-summary p {
-  margin: 0 0 1rem 0;
-  color: #2e7d32;
-  font-weight: 500;
-}
-
-.generate-btn {
-  padding: 0.75rem 2rem;
-  background: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: background 0.3s;
-}
-
-.generate-btn:hover {
-  background: #45a049;
-}
-
-/* Pending entities section */
-.pending-entities {
-  margin-top: 2rem;
-  padding: 1rem;
-  background: #f5f5f5;
-  border-radius: 8px;
-}
-
-.pending-entities h3 {
-  margin: 0 0 1rem 0;
-  color: #666;
-  font-size: 1rem;
-}
-
-.entity-status-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 0.5rem;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.entity-status-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem;
-  background: white;
-  border-radius: 4px;
-  border-left: 3px solid #ddd;
-  font-size: 0.85rem;
-}
-
-.entity-status-item.analyzing {
-  border-left-color: #4CAF50;
-  background: #f1f8e9;
-}
-
-.entity-status-item.fetching {
-  border-left-color: #2196F3;
-  background: #e3f2fd;
-}
-
-.entity-status-item.fetched {
-  border-left-color: #FFC107;
-  background: #fff8e1;
-}
-
-.entity-status-item.queued {
-  border-left-color: #9E9E9E;
-}
-
-.entity-status-item .entity-id {
-  font-family: monospace;
-  font-size: 0.8rem;
-  color: #333;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.entity-status-item .entity-status {
-  font-size: 0.75rem;
-  color: #666;
-  text-transform: uppercase;
-  padding: 0.2rem 0.5rem;
-  background: rgba(0,0,0,0.05);
-  border-radius: 3px;
-  margin-left: 0.5rem;
-}
-
 @media (max-width: 768px) {
-  .selection-actions {
-    justify-content: center;
-  }
-  
-  .select-btn {
-    font-size: 0.85rem;
-    padding: 0.4rem 0.8rem;
-  }
-  
-  .entity-status-grid {
+  .entity-cards {
     grid-template-columns: 1fr;
   }
 }

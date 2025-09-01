@@ -240,12 +240,25 @@ const runSimulation = async () => {
     const { start, end } = getTimeRangeFromData()
     const sampleInterval = getSampleInterval()
     
+    // Serialize reactive objects to plain data before passing to worker
+    const plainConfig = JSON.parse(JSON.stringify({
+      prior: props.config.prior,
+      probability_threshold: props.config.probability_threshold,
+      observations: props.config.observations
+    }))
+    
+    // Convert Map to plain object to avoid proxy serialization issues
+    const plainCachedData = new Map()
+    for (const [key, value] of props.cachedHistoricalData.entries()) {
+      plainCachedData.set(key, JSON.parse(JSON.stringify(value)))
+    }
+    
     // Run simulation in worker thread
     simulationResult.value = await simulationService.simulate(
-      props.config.prior,
-      props.config.probability_threshold,
-      props.config.observations,
-      props.cachedHistoricalData,
+      plainConfig.prior,
+      plainConfig.probability_threshold,
+      plainConfig.observations,
+      plainCachedData,
       { start, end },
       sampleInterval
     )

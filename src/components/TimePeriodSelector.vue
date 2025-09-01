@@ -1,52 +1,33 @@
 <template>
-  <div class="time-period-selector">
-    <h2>Mark Time Periods</h2>
-    <p>Add examples of when the Bayesian sensor should be TRUE or FALSE. You can mark periods across multiple days/weeks.</p>
-    <div class="historical-notice">
-      <p>📅 <strong>Historical Data Only:</strong> Select past dates and times only. We need historical data to analyze entity states and calculate probabilities.</p>
-    </div>
+  <n-space vertical size="large">
+    <n-text tag="p">Add examples of when the Bayesian sensor should be TRUE or FALSE. You can mark periods across multiple days/weeks.</n-text>
     
-    <div class="controls">
-      <div class="mode-selector">
-        <button 
-          :class="['btn', mode === 'single' ? 'btn-primary' : 'btn-outline', { active: mode === 'single' }]"
-          @click="mode = 'single'"
-        >
-          Single Period
-        </button>
-        <button 
-          :class="['btn', mode === 'bulk' ? 'btn-primary' : 'btn-outline', { active: mode === 'bulk' }]"
-          @click="mode = 'bulk'"
-        >
-          Bulk Selection
-        </button>
-        <button 
-          :class="['btn', mode === 'timeline' ? 'btn-primary' : 'btn-outline', { active: mode === 'timeline' }]"
-          @click="mode = 'timeline'"
-        >
-          Visual Timeline
-        </button>
-      </div>
-      
-      <div class="state-toggle">
-        <label class="toggle-label">
-          <input 
-            v-model="currentState" 
-            type="radio" 
-            :value="true"
-          />
-          <span class="true-state">Marking TRUE periods</span>
-        </label>
-        <label class="toggle-label">
-          <input 
-            v-model="currentState" 
-            type="radio" 
-            :value="false"
-          />
-          <span class="false-state">Marking FALSE periods</span>
-        </label>
-      </div>
-    </div>
+    <n-alert type="warning" title="Historical Data Only">
+      Select past dates and times only. We need historical data to analyze entity states and calculate probabilities.
+    </n-alert>
+    
+    <n-card :bordered="false">
+      <n-space justify="space-between" align="center">
+        <n-radio-group v-model:value="mode" button-style="solid">
+          <n-radio-button value="single">Single Period</n-radio-button>
+          <n-radio-button value="bulk">Bulk Selection</n-radio-button>
+          <n-radio-button value="timeline">Visual Timeline</n-radio-button>
+        </n-radio-group>
+        
+        <n-radio-group v-model:value="currentState">
+          <n-radio :value="true">
+            <n-text :style="{ color: '#18a058', fontWeight: 'bold' }">
+              Marking TRUE periods
+            </n-text>
+          </n-radio>
+          <n-radio :value="false">
+            <n-text :style="{ color: '#d03050', fontWeight: 'bold' }">
+              Marking FALSE periods
+            </n-text>
+          </n-radio>
+        </n-radio-group>
+      </n-space>
+    </n-card>
 
     <SinglePeriodMode 
       v-if="mode === 'single'"
@@ -83,12 +64,21 @@
       @mark-all-remaining-as="markAllRemainingAs"
       @clear-all-periods="clearAllPeriods"
     />
-  </div>
+  </n-space>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { format } from 'date-fns'
+import { 
+  NSpace, 
+  NCard, 
+  NAlert, 
+  NText, 
+  NRadioGroup, 
+  NRadio,
+  NRadioButton
+} from 'naive-ui'
 import SinglePeriodMode from './TimePeriodSelector/SinglePeriodMode.vue'
 import BulkPeriodMode from './TimePeriodSelector/BulkPeriodMode.vue'
 import TimelineMode from './TimePeriodSelector/TimelineMode.vue'
@@ -206,90 +196,9 @@ const autoSave = () => {
 </script>
 
 <style scoped>
-
-.time-period-selector {
-  max-width: 1200px;
-  margin: 2rem auto;
-}
-
-h2 {
-  color: #333;
-  margin-bottom: 0.5rem;
-}
-
-p {
-  color: #666;
-  margin-bottom: 1.5rem;
-}
-
-.historical-notice {
-  background: #fff3cd;
-  border: 1px solid #ffeaa7;
-  border-radius: 4px;
-  padding: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.historical-notice p {
-  margin: 0;
-  color: #856404;
-}
-
-.controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 8px;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.mode-selector {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.state-toggle {
-  display: flex;
-  gap: 1rem;
-}
-
-.toggle-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
-.toggle-label input[type="radio"] {
-  margin: 0;
-}
-
-.true-state {
-  color: #4CAF50;
-  font-weight: bold;
-}
-
-.false-state {
-  color: #f44336;
-  font-weight: bold;
-}
-
 @media (max-width: 768px) {
-  .controls {
+  :deep(.n-space) {
     flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .mode-selector {
-    justify-content: center;
-  }
-  
-  .state-toggle {
-    justify-content: center;
   }
 }
 </style>
