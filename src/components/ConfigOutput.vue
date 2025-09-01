@@ -40,11 +40,14 @@
         </div>
 
         <div class="actions">
-          <button @click="copyToClipboard" class="copy-btn">
+          <button @click="copyToClipboard" class="btn btn-primary">
             {{ copyText }}
           </button>
-          <button @click="downloadConfig" class="download-btn">
+          <button @click="downloadConfig" class="btn btn-secondary">
             Download YAML
+          </button>
+          <button @click="toggleSimulator" class="btn btn-accent">
+            {{ showSimulator ? 'Hide' : 'Show' }} Simulation
           </button>
         </div>
       </div>
@@ -57,7 +60,14 @@
         </div>
       </div>
 
-      <div class="yaml-output">
+      <div v-if="showSimulator && currentConfig" class="simulator-section">
+        <BayesianSimulator 
+          :config="currentConfig" 
+          :cached-historical-data="cachedHistoricalData" 
+        />
+      </div>
+
+      <div v-show="!showSimulator" class="yaml-output">
         <pre><code class="language-yaml" v-html="highlightedYaml"></code></pre>
       </div>
 
@@ -97,16 +107,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { stringify as yamlStringify } from 'yaml'
 import Prism from 'prismjs'
 import 'prismjs/components/prism-yaml'
 import 'prismjs/themes/prism-tomorrow.css'
+import BayesianSimulator from './BayesianSimulator.vue'
 import type { BayesianSensorConfig, EntityProbability } from '../types/bayesian'
 
 const props = defineProps<{
   config: BayesianSensorConfig | null
   entityProbabilities: EntityProbability[]
+  haConnection: any
+  cachedHistoricalData: Map<string, any[]>
 }>()
 
 const emit = defineEmits<{
@@ -118,6 +131,7 @@ const prior = ref(0.5)
 const threshold = ref(0.5)
 const maxObservations = ref(10)
 const copyText = ref('Copy YAML')
+const showSimulator = ref(false)
 
 const currentConfig = computed(() => {
   if (!props.config) return null
@@ -163,10 +177,7 @@ const yamlOutput = computed(() => {
     binary_sensor: [cleanConfig]
   }, {
     indent: 2,
-    lineWidth: 80,
-    quotingType: '"',
-    forceQuotes: false,
-    sortKeys: false
+    lineWidth: 80
   })
 })
 
@@ -225,9 +236,14 @@ const downloadConfig = () => {
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
+
+const toggleSimulator = () => {
+  showSimulator.value = !showSimulator.value
+}
 </script>
 
 <style scoped>
+
 .config-output {
   max-width: 1200px;
   margin: 2rem auto;
@@ -296,7 +312,8 @@ h2 {
 }
 
 .copy-btn,
-.download-btn {
+.download-btn,
+.simulate-btn {
   padding: 0.5rem 1rem;
   border: none;
   border-radius: 4px;
@@ -321,6 +338,15 @@ h2 {
 
 .download-btn:hover {
   background: #1976D2;
+}
+
+.simulate-btn {
+  background: #9C27B0;
+  color: white;
+}
+
+.simulate-btn:hover {
+  background: #7B1FA2;
 }
 
 .config-preview {
@@ -453,5 +479,21 @@ h2 {
 
 .false-fill {
   background: linear-gradient(90deg, #f44336, #ef5350);
+}
+
+.simulator-section {
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .config-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .actions {
+    flex-direction: row;
+    justify-content: center;
+  }
 }
 </style>

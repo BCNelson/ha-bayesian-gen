@@ -20,6 +20,8 @@ const {
   entityStatusMap,
   canAnalyze,
   calculator,
+  haConnection,
+  cachedHistoricalData,
   connectToHA,
   updatePeriods,
   analyzeEntities,
@@ -165,6 +167,8 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
         <ConfigOutput 
           :config="generatedConfig"
           :entity-probabilities="analyzedEntities"
+          :ha-connection="haConnection"
+          :cached-historical-data="cachedHistoricalData"
           @config-updated="updateGeneratedConfig"
         />
       </div>

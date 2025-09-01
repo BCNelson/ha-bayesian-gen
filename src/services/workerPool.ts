@@ -16,15 +16,20 @@ export class WorkerPool {
   private progressCallback?: (entityId: string, status: string, message?: string) => void
   private wasmInitPromises = new Map<Worker, Promise<void>>()
 
-  constructor(workerCount: number = 8) {
+  constructor(workerCount: number = navigator.hardwareConcurrency || 4) {
     const actualWorkerCount = Math.max(2, Math.min(workerCount, 8))
     console.log(`Initializing worker pool with ${actualWorkerCount} workers`)
     
-    for (let i = 0; i < actualWorkerCount; i++) {
+    // Initialize workers in parallel for faster startup
+    const workerPromises = Array.from({ length: actualWorkerCount }, () => {
       const worker = new AnalysisWorker()
-      this.initializeWorker(worker)
       this.workers.push(worker)
-    }
+      return this.initializeWorker(worker)
+    })
+    
+    Promise.all(workerPromises).catch(error => {
+      console.error('Failed to initialize some workers:', error)
+    })
   }
 
   private async initializeWorker(worker: Worker) {
@@ -123,11 +128,9 @@ export class WorkerPool {
 
   async analyzeEntity(entityHistory: any, periods: any): Promise<any> {
     // Wait for at least one worker to be initialized
-    if (this.availableWorkers.length === 0) {
+    if (this.availableWorkers.length === 0 && this.wasmInitPromises.size > 0) {
       await Promise.race(Array.from(this.wasmInitPromises.values()))
     }
-    
-    const startTime = performance.now()
     
     return new Promise((resolve, reject) => {
       const taskId = `task_${this.nextTaskId++}`
@@ -135,13 +138,7 @@ export class WorkerPool {
       const task = {
         id: taskId,
         task: { entityHistory, periods },
-        resolve: (result: any) => {
-          const duration = performance.now() - startTime
-          if (duration > 1000) {
-            console.log(`Worker task ${taskId} took ${duration.toFixed(0)}ms`)
-          }
-          resolve(result)
-        },
+        resolve,
         reject
       }
 

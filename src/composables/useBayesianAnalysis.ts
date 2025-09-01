@@ -1,7 +1,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { HomeAssistantAPI } from '../services/homeAssistant'
 import { BayesianCalculator } from '../services/bayesianCalculator'
-import { WorkerPool } from '../services/workerPool'
+import { AnalysisOrchestrator } from '../services/analysisOrchestrator'
 import type { HAConnection, HAEntity } from '../types/homeAssistant'
 import type { TimePeriod, EntityProbability, BayesianSensorConfig } from '../types/bayesian'
 
@@ -16,16 +16,38 @@ export const useBayesianAnalysis = () => {
   const analyzedEntities = ref<EntityProbability[]>([])
   const generatedConfig = ref<BayesianSensorConfig | null>(null)
   
+  // Cache historical data for simulation
+  const cachedHistoricalData = ref<Map<string, any[]>>(new Map())
+  
   const isAnalyzing = ref(false)
   const analysisError = ref<string | null>(null)
   const analysisProgress = ref({ current: 0, total: 0, currentEntity: '' })
   const entityStatusMap = ref<Map<string, { status: 'queued' | 'fetching' | 'fetched' | 'analyzing' | 'completed' | 'error', message?: string }>>(new Map())
   
   const calculator = new BayesianCalculator()
-  const workerPool = new WorkerPool()
+  const orchestrator = new AnalysisOrchestrator()
+  
+  // Set up orchestrator callbacks
+  orchestrator.setCallbacks({
+    onProgress: (progress) => {
+      analysisProgress.value = progress
+    },
+    onEntityStatus: (entityId, status) => {
+      entityStatusMap.value.set(entityId, status)
+    },
+    onResult: (newResults) => {
+      // Add new results immediately and sort
+      analyzedEntities.value.push(...newResults)
+      analyzedEntities.value.sort((a, b) => b.discriminationPower - a.discriminationPower)
+    },
+    onEntityFetched: (entityId, history) => {
+      // Cache historical data immediately for simulation
+      cachedHistoricalData.value.set(entityId, history)
+    }
+  })
   
   onUnmounted(() => {
-    workerPool.terminate()
+    orchestrator.terminate()
   })
   
   const canAnalyze = computed(() => {
@@ -71,183 +93,27 @@ export const useBayesianAnalysis = () => {
     isAnalyzing.value = true
     analysisError.value = null
     entityStatusMap.value.clear()
-    analyzedEntities.value = [] // Clear previous results
-    
-    // Set up progress callback for worker pool
-    workerPool.setProgressCallback((entityId: string, status: string, message?: string) => {
-      if (status === 'analyzing') {
-        entityStatusMap.value.set(entityId, { status: 'analyzing', message })
-      } else if (status === 'completed') {
-        entityStatusMap.value.set(entityId, { status: 'completed', message })
-      }
-    })
+    analyzedEntities.value = []
     
     try {
-      const allPeriods = [...periods.value]
-      const earliestStart = new Date(Math.min(...allPeriods.map(p => p.start.getTime())))
-      const latestEnd = new Date(Math.max(...allPeriods.map(p => p.end.getTime())))
+      const results = await orchestrator.analyzeEntities(
+        haApi.value!,
+        entities.value,
+        periods.value,
+        selectedEntityIds
+      )
       
-      let relevantEntityIds: string[]
-      
-      if (selectedEntityIds && selectedEntityIds.length > 0) {
-        relevantEntityIds = selectedEntityIds
-      } else {
-        relevantEntityIds = entities.value
-          .filter(entity => {
-            const domain = entity.entity_id.split('.')[0]
-            return !['automation', 'script', 'scene', 'group', 'zone', 'update', 'button', 'persistent_notification'].includes(domain) &&
-                   entity.state !== 'unavailable' &&
-                   entity.state !== 'unknown' &&
-                   entity.state !== ''
-          })
-          .map(entity => entity.entity_id)
-      }
-      
-      analysisProgress.value = { current: 0, total: relevantEntityIds.length, currentEntity: '' }
-      
-      // Initialize all entities as queued
-      relevantEntityIds.forEach(entityId => {
-        entityStatusMap.value.set(entityId, { status: 'queued' })
+      // Cache historical data for simulation
+      results.forEach(result => {
+        if (!cachedHistoricalData.value.has(result.entityId)) {
+          cachedHistoricalData.value.set(result.entityId, [])
+        }
       })
       
-      const fetchQueue = [...relevantEntityIds]
-      const analysisQueue: { entityId: string; history: any; periods: any }[] = []
-      const maxConcurrentFetches = 2
-      let activeFetches = 0
-      let activeAnalyses = 0
-      let completedCount = 0
-      let fetchedCount = 0
-      
-      const serializedPeriods = periods.value.map(p => ({
-        ...p,
-        start: p.start.toISOString(),
-        end: p.end.toISOString()
-      }))
-      
-      await new Promise<void>((resolve) => {
-        // Check if we're done
-        const checkCompletion = () => {
-          if (fetchQueue.length === 0 && analysisQueue.length === 0 && 
-              activeFetches === 0 && activeAnalyses === 0) {
-            resolve()
-          }
-        }
-        
-        // Fetch entities from Home Assistant
-        const fetchEntity = async (entityId: string) => {
-          try {
-            // Update status to fetching
-            entityStatusMap.value.set(entityId, { status: 'fetching', message: 'Fetching history...' })
-            
-            analysisProgress.value = { 
-              current: completedCount, 
-              total: relevantEntityIds.length, 
-              currentEntity: `Fetching: ${entityId}` 
-            }
-            
-            const rawEntityHistory = await haApi.value!.getHistory(
-              earliestStart,
-              latestEnd,
-              [entityId]
-            )
-            
-            const entityHistory = JSON.parse(JSON.stringify(rawEntityHistory))
-            
-            fetchedCount++
-            
-            // Mark as fetched (waiting for analysis)
-            entityStatusMap.value.set(entityId, { status: 'fetched', message: 'Waiting for analysis...' })
-            
-            // Add to analysis queue
-            analysisQueue.push({
-              entityId,
-              history: entityHistory,
-              periods: serializedPeriods
-            })
-            
-            // Trigger analysis processing
-            processAnalysisQueue()
-            
-          } catch (error) {
-            console.warn(`Failed to fetch entity ${entityId}:`, error)
-            entityStatusMap.value.set(entityId, { status: 'error', message: `Fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}` })
-            completedCount++
-          } finally {
-            activeFetches--
-            processFetchQueue()
-          }
-        }
-        
-        // Analyze entities using workers
-        const analyzeEntity = async (entityId: string, history: any, periods: any) => {
-          try {
-            // Update status to analyzing
-            entityStatusMap.value.set(entityId, { status: 'analyzing', message: 'Analyzing states...' })
-            
-            analysisProgress.value = { 
-              current: completedCount, 
-              total: relevantEntityIds.length, 
-              currentEntity: `Analyzing: ${entityId}` 
-            }
-            
-            const entityProbabilities = await workerPool.analyzeEntity(history, periods)
-            
-            if (Array.isArray(entityProbabilities)) {
-              // Add results immediately to displayed results
-              analyzedEntities.value.push(...entityProbabilities)
-              // Sort by discrimination power to maintain order
-              analyzedEntities.value.sort((a, b) => b.discriminationPower - a.discriminationPower)
-            }
-            
-            completedCount++
-            analysisProgress.value = { 
-              current: completedCount, 
-              total: relevantEntityIds.length, 
-              currentEntity: entityId 
-            }
-            
-            // Mark as completed
-            entityStatusMap.value.set(entityId, { status: 'completed', message: 'Analysis complete' })
-            
-          } catch (error) {
-            console.warn(`Failed to analyze entity ${entityId}:`, error)
-            entityStatusMap.value.set(entityId, { status: 'error', message: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}` })
-            completedCount++
-          } finally {
-            activeAnalyses--
-            processAnalysisQueue()
-            checkCompletion()
-          }
-        }
-        
-        // Process fetch queue
-        const processFetchQueue = () => {
-          while (activeFetches < maxConcurrentFetches && fetchQueue.length > 0) {
-            const entityId = fetchQueue.shift()!
-            activeFetches++
-            fetchEntity(entityId)
-          }
-          checkCompletion()
-        }
-        
-        // Process analysis queue (send to workers)
-        const processAnalysisQueue = () => {
-          // Process as many as we have workers available
-          while (analysisQueue.length > 0 && activeAnalyses < 8) { // Assuming max 8 workers
-            const task = analysisQueue.shift()!
-            activeAnalyses++
-            analyzeEntity(task.entityId, task.history, task.periods)
-          }
-        }
-        
-        // Start processing
-        processFetchQueue()
-      })
-      
-      // Generate final config after all entities are analyzed
-      if (analyzedEntities.value.length > 0) {
+      // Generate final config
+      if (results.length > 0) {
         const config = calculator.generateBayesianConfig(
-          analyzedEntities.value.slice(0, 10), // Take top 10 for default config
+          results.slice(0, 10),
           'Bayesian Sensor',
           10
         )
@@ -271,10 +137,10 @@ export const useBayesianAnalysis = () => {
     analysisError.value = null
     analysisProgress.value = { current: 0, total: 0, currentEntity: '' }
     entityStatusMap.value.clear()
+    cachedHistoricalData.value.clear()
   }
   
   return {
-    haConnection,
     isConnected,
     connectionError,
     entities,
@@ -287,6 +153,8 @@ export const useBayesianAnalysis = () => {
     entityStatusMap,
     canAnalyze,
     calculator,
+    haConnection,
+    cachedHistoricalData,
     connectToHA,
     updatePeriods,
     analyzeEntities,
