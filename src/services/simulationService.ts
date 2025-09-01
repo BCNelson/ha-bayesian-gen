@@ -115,18 +115,6 @@ export class SimulationService {
         
         // Sanitize observations for cloning
         const sanitizedObservations = observations.map(obs => {
-          // DEBUG: Only log our target entity or all if target is selected
-          const targetEntity = 'sensor.0xe406bffffe000eea_pm25'
-          const hasTargetEntity = observations.some(o => o.entity_id === targetEntity)
-          
-          if (!hasTargetEntity || obs.entity_id === targetEntity) {
-            console.log(`SIMULATION DEBUG - ${obs.entity_id} observation:`, {
-              prob_given_true: obs.prob_given_true,
-              prob_given_false: obs.prob_given_false,
-              platform: obs.platform
-            })
-          }
-          
           return {
             entity_id: obs.entity_id,
             platform: obs.platform,

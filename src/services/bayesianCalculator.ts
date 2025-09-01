@@ -189,27 +189,13 @@ export class BayesianCalculator {
     if (skipFiltering) {
       // User selections - use exactly what they selected
       topEntities = entityProbabilities.slice(0, maxObservations)
-      console.log(`CONFIG DEBUG - Using ${topEntities.length} user-selected entities without filtering`)
     } else {
       // Automatic selection - filter out results with very low discrimination power
       const usefulResults = entityProbabilities.filter(ep => ep.discriminationPower > 0.1)
       topEntities = usefulResults.slice(0, maxObservations)
-      console.log(`CONFIG DEBUG - Auto-filtered from ${entityProbabilities.length} to ${usefulResults.length} useful results (discrimination > 0.1)`)
     }
     
     const observations: BayesianObservation[] = topEntities.map(ep => {
-      // DEBUG: Log target entity probabilities in config generation
-      const targetEntity = 'sensor.0xe406bffffe000eea_pm25'
-      if (ep.entityId === targetEntity) {
-        console.log(`CONFIG GENERATION DEBUG - ${targetEntity} entity data:`, {
-          probGivenTrue: ep.probGivenTrue,
-          probGivenFalse: ep.probGivenFalse,
-          discriminationPower: ep.discriminationPower,
-          isNumeric: ep.numericStats?.isNumeric,
-          hasOptimalThresholds: !!ep.optimalThresholds
-        })
-      }
-
       // Check if this entity has numeric stats and optimal thresholds
       if (ep.numericStats?.isNumeric && ep.optimalThresholds) {
         const observation: BayesianObservation = {

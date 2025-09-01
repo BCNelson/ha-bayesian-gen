@@ -110,8 +110,6 @@ export const useBayesianAnalysis = () => {
   const analyzeEntities = async (selectedEntityIds?: string[]) => {
     if (!canAnalyze.value || !haApi.value) return
     
-    console.log('ANALYSIS DEBUG - Selected entity IDs:', selectedEntityIds)
-    
     isAnalyzing.value = true
     analysisError.value = null
     entityStatusMap.value.clear()
@@ -125,9 +123,6 @@ export const useBayesianAnalysis = () => {
         selectedEntityIds
       )
       
-      console.log('ANALYSIS DEBUG - Entities that were actually analyzed:', 
-        [...new Set(results.map(r => r.entityId))])
-      
       // Cache historical data for simulation
       results.forEach(result => {
         if (!cachedHistoricalData.value.has(result.entityId)) {
@@ -137,36 +132,11 @@ export const useBayesianAnalysis = () => {
       
       // Generate final config
       if (results.length > 0) {
-        console.log('CONFIG GENERATION DEBUG - Analysis results:', results.slice(0, 10).map(r => ({
-          entityId: r.entityId,
-          probGivenTrue: r.probGivenTrue,
-          probGivenFalse: r.probGivenFalse,
-          discriminationPower: r.discriminationPower
-        })))
-
-        // DEBUG: Log specific target entity before config generation
-        const targetEntity = 'sensor.0xe406bffffe000eea_pm25'
-        const targetResults = results.filter(r => r.entityId === targetEntity)
-        if (targetResults.length > 0) {
-          console.log(`CONFIG DEBUG - ${targetEntity} probabilities before config generation:`, targetResults.map(r => ({
-            state: r.state,
-            probGivenTrue: r.probGivenTrue,
-            probGivenFalse: r.probGivenFalse,
-            discriminationPower: r.discriminationPower
-          })))
-        }
-        
         const config = calculator.generateBayesianConfig(
           results.slice(0, 10),
           'Bayesian Sensor',
           10
         )
-        
-        console.log('CONFIG GENERATION DEBUG - Generated observations:', config.observations.map(obs => ({
-          entity_id: obs.entity_id,
-          prob_given_true: obs.prob_given_true,
-          prob_given_false: obs.prob_given_false
-        })))
         
         generatedConfig.value = config
       }
