@@ -1,9 +1,12 @@
 export interface ChartConfig {
   height: number
   threshold: number
+  showSensorValues?: boolean
+  sensorDataRange?: { min: number; max: number }
 }
 
-export const createBayesianChartOptions = (config: ChartConfig) => ({
+export const createBayesianChartOptions = (config: ChartConfig) => {
+  const options = {
   chart: {
     id: 'bayesian-probability',
     type: 'line',
@@ -33,7 +36,8 @@ export const createBayesianChartOptions = (config: ChartConfig) => ({
   },
   stroke: {
     curve: 'stepline',
-    width: 2
+    width: config.showSensorValues ? [2, 2, 2, 3] : [2, 2, 2],
+    dashArray: config.showSensorValues ? [0, 0, 5, 0] : [0, 0, 5]
   },
   xaxis: {
     title: {
@@ -45,7 +49,29 @@ export const createBayesianChartOptions = (config: ChartConfig) => ({
       format: 'HH:mm'
     }
   },
-  yaxis: {
+  yaxis: config.showSensorValues ? [
+    {
+      title: {
+        text: 'Probability (%)'
+      },
+      min: 0,
+      max: 100,
+      labels: {
+        formatter: (value: number) => `${value.toFixed(0)}%`
+      }
+    },
+    {
+      opposite: true,
+      title: {
+        text: 'Sensor Value'
+      },
+      min: config.sensorDataRange?.min,
+      max: config.sensorDataRange?.max,
+      labels: {
+        formatter: (value: number) => value.toFixed(1)
+      }
+    }
+  ] : {
     title: {
       text: 'Probability (%)'
     },
@@ -59,28 +85,27 @@ export const createBayesianChartOptions = (config: ChartConfig) => ({
     yaxis: [
       {
         y: config.threshold * 100,
-        borderColor: '#FF4560',
+        borderColor: '#D32F2F',
         borderWidth: 2,
-        strokeDashArray: 5,
+        strokeDashArray: 8,
         label: {
-          borderColor: '#FF4560',
+          borderColor: '#D32F2F',
           style: {
             color: '#fff',
-            background: '#FF4560'
+            background: '#D32F2F',
+            fontSize: '12px',
+            fontWeight: 600
           },
-          text: `Threshold (${(config.threshold * 100).toFixed(0)}%)`
+          text: `Threshold (${(config.threshold * 100).toFixed(0)}%)`,
+          position: 'left'
         }
       }
     ]
   },
-  colors: ['#2196F3', '#4CAF50'],
+  colors: config.showSensorValues ? ['#2E7D32', '#9C27B0', '#FFC107', '#FF5722'] : ['#2E7D32', '#9C27B0', '#FFC107', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'],
   fill: {
-    type: 'gradient',
-    gradient: {
-      shadeIntensity: 1,
-      opacityFrom: 0.7,
-      opacityTo: 0.3
-    }
+    type: 'solid',
+    opacity: 0.7
   },
   markers: {
     size: 0
@@ -90,10 +115,17 @@ export const createBayesianChartOptions = (config: ChartConfig) => ({
     showForSingleSeries: false
   },
   grid: {
-    borderColor: '#e7e7e7',
-    row: {
-      colors: ['#f3f3f3', 'transparent'],
-      opacity: 0.5
+    borderColor: '#e0e0e0',
+    strokeDashArray: 1,
+    xaxis: {
+      lines: {
+        show: false
+      }
+    },
+    yaxis: {
+      lines: {
+        show: true
+      }
     }
   },
   tooltip: {
@@ -101,35 +133,90 @@ export const createBayesianChartOptions = (config: ChartConfig) => ({
       format: 'dd MMM HH:mm'
     },
     y: {
-      formatter: (value: number) => `${value.toFixed(1)}%`
+      formatter: (value: number, { seriesIndex }: any) => {
+        if (config.showSensorValues && seriesIndex === 3) {
+          return value.toFixed(1) // Sensor values without %
+        }
+        return `${value.toFixed(1)}%` // Probability values with %
+      }
     }
   },
   dataLabels: {
     enabled: false
   }
-})
+  }
+  
+  // Add series-to-axis mapping when showing sensor values
+  if (config.showSensorValues) {
+    options.chart.group = 'bayesian-chart'
+  }
+  
+  return options
+}
 
-export const transformSimulationData = (points: Array<{timestamp: Date, probability: number, sensorState: boolean}>) => {
+export const transformSimulationData = (
+  points: Array<{timestamp: Date, probability: number, sensorState: boolean, activeObservations?: string[]}>,
+  includeEntityStates: boolean = false,
+  visibleEntities: Set<string> = new Set()
+) => {
   // Optimize data transformation for large datasets
   const dataLength = points.length
   const probabilityData = new Array(dataLength)
   const stateData = new Array(dataLength)
+  
+  // Track unique entities if we need entity states
+  const entityStateData: Map<string, Array<{x: number, y: number}>> = new Map()
   
   for (let i = 0; i < dataLength; i++) {
     const point = points[i]
     const timestamp = point.timestamp.getTime()
     probabilityData[i] = { x: timestamp, y: point.probability * 100 }
     stateData[i] = { x: timestamp, y: point.sensorState ? 100 : 0 }
+    
+    // Process individual entity states if needed
+    if (includeEntityStates && point.activeObservations) {
+      // Initialize arrays for new entities
+      point.activeObservations.forEach(entityId => {
+        if (!entityStateData.has(entityId)) {
+          entityStateData.set(entityId, new Array(dataLength))
+        }
+      })
+      
+      // Set state for all tracked entities at this timestamp
+      for (const [entityId, data] of entityStateData) {
+        const isActive = point.activeObservations.includes(entityId)
+        data[i] = { x: timestamp, y: isActive ? 85 : 15 } // Offset from 0 and 100 for visibility
+      }
+    }
   }
 
-  return [
+  const series = [
     {
       name: 'Probability',
-      data: probabilityData
+      data: probabilityData,
+      type: 'line'
     },
     {
       name: 'Sensor State (ON/OFF)',
-      data: stateData
+      data: stateData,
+      type: 'area'
     }
   ]
+  
+  // Add entity state series if requested and visible
+  if (includeEntityStates) {
+    let colorIndex = 2 // Start after the first two series
+    for (const [entityId, data] of entityStateData) {
+      if (visibleEntities.size === 0 || visibleEntities.has(entityId)) {
+        series.push({
+          name: entityId.split('.').pop() || entityId, // Use friendly name
+          data: data.filter(d => d !== undefined), // Remove any undefined entries
+          type: 'line'
+        })
+        colorIndex++
+      }
+    }
+  }
+
+  return series
 }

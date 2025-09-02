@@ -88,10 +88,105 @@ pub fn create_unified_timeline(
     segments
 }
 
-pub fn analyze_state_segments(segments: &[StateSegment]) -> FxHashMap<String, StateAnalysis> {
+pub fn analyze_state_segments_with_periods(
+    entity_history: &[HAHistoryEntry],
+    periods: &[TimePeriod],
+) -> FxHashMap<String, StateAnalysis> {
     let mut state_analysis: FxHashMap<String, StateAnalysis> = FxHashMap::default();
-    let mut seen_in_true_period: FxHashSet<String> = FxHashSet::default();
-    let mut seen_in_false_period: FxHashSet<String> = FxHashSet::default();
+    
+    // Track which specific periods contain each state
+    let mut state_in_true_periods: FxHashMap<String, FxHashSet<String>> = FxHashMap::default();
+    let mut state_in_false_periods: FxHashMap<String, FxHashSet<String>> = FxHashMap::default();
+
+    // Analyze each period individually
+    for period in periods {
+        let period_start = parse_timestamp(&period.start);
+        let period_end = parse_timestamp(&period.end);
+        let period_id = format!("{}_{}", period_start, period_end); // Unique identifier for each period
+        
+        // Find the state at the beginning of the period
+        let mut period_states: FxHashSet<String> = FxHashSet::default();
+        let mut current_state: Option<String> = None;
+        
+        // Find initial state before period starts
+        for entry in entity_history {
+            let entry_time = parse_timestamp(&entry.last_changed);
+            if entry_time <= period_start {
+                current_state = Some(entry.state.clone());
+            } else {
+                break;
+            }
+        }
+        
+        // Track all states that occur during this period
+        for entry in entity_history {
+            let entry_time = parse_timestamp(&entry.last_changed);
+            
+            if entry_time > period_start && entry_time < period_end {
+                current_state = Some(entry.state.clone());
+            }
+            
+            if entry_time >= period_start && entry_time <= period_end {
+                if let Some(ref state) = current_state {
+                    period_states.insert(state.clone());
+                }
+            }
+        }
+        
+        // Add the final state if we have one
+        if let Some(ref state) = current_state {
+            period_states.insert(state.clone());
+        }
+        
+        // Record which states appeared in this period
+        for state in period_states {
+            if period.is_true_period {
+                state_in_true_periods
+                    .entry(state.clone())
+                    .or_insert_with(FxHashSet::default)
+                    .insert(period_id.clone());
+            } else {
+                state_in_false_periods
+                    .entry(state.clone())
+                    .or_insert_with(FxHashSet::default)
+                    .insert(period_id.clone());
+            }
+        }
+    }
+
+    // Count how many periods each state appeared in
+    let mut all_states: FxHashSet<String> = FxHashSet::default();
+    all_states.extend(state_in_true_periods.keys().cloned());
+    all_states.extend(state_in_false_periods.keys().cloned());
+
+    for state in all_states {
+        let true_count = state_in_true_periods
+            .get(&state)
+            .map(|periods| periods.len())
+            .unwrap_or(0);
+        
+        let false_count = state_in_false_periods
+            .get(&state)
+            .map(|periods| periods.len())
+            .unwrap_or(0);
+
+        state_analysis.insert(state, StateAnalysis {
+            true_occurrences: true_count,
+            false_occurrences: false_count,
+        });
+    }
+
+    state_analysis
+}
+
+pub fn analyze_state_segments(segments: &[StateSegment]) -> FxHashMap<String, StateAnalysis> {
+    // This function is kept for backwards compatibility but should not be used
+    // The issue is in the segment creation logic, not the analysis
+    let mut state_analysis: FxHashMap<String, StateAnalysis> = FxHashMap::default();
+    
+    // Track which periods (by start time) contain each state
+    let mut state_in_true_periods: FxHashMap<String, FxHashSet<i64>> = FxHashMap::default();
+    let mut state_in_false_periods: FxHashMap<String, FxHashSet<i64>> = FxHashMap::default();
 
     for segment in segments {
         let duration = segment.end - segment.start;
@@ -99,23 +194,42 @@ pub fn analyze_state_segments(segments: &[StateSegment]) -> FxHashMap<String, St
             continue; // Skip segments shorter than 1 second
         }
 
-        let analysis = state_analysis
-            .entry(segment.state.clone())
-            .or_insert(StateAnalysis {
-                true_occurrences: 0,
-                false_occurrences: 0,
-            });
-
-        // Track state per period (true/false), not per segment
         let state_key = segment.state.clone();
-
-        if segment.is_true_period && !seen_in_true_period.contains(&state_key) {
-            analysis.true_occurrences += 1;
-            seen_in_true_period.insert(state_key.clone());
-        } else if !segment.is_true_period && !seen_in_false_period.contains(&state_key) {
-            analysis.false_occurrences += 1;
-            seen_in_false_period.insert(state_key);
+        
+        // Use segment start time as period identifier
+        if segment.is_true_period {
+            state_in_true_periods
+                .entry(state_key.clone())
+                .or_insert_with(FxHashSet::default)
+                .insert(segment.start);
+        } else {
+            state_in_false_periods
+                .entry(state_key.clone())
+                .or_insert_with(FxHashSet::default)
+                .insert(segment.start);
         }
+    }
+
+    // Count how many periods each state appeared in
+    let mut all_states: FxHashSet<String> = FxHashSet::default();
+    all_states.extend(state_in_true_periods.keys().cloned());
+    all_states.extend(state_in_false_periods.keys().cloned());
+
+    for state in all_states {
+        let true_count = state_in_true_periods
+            .get(&state)
+            .map(|periods| periods.len())
+            .unwrap_or(0);
+        
+        let false_count = state_in_false_periods
+            .get(&state)
+            .map(|periods| periods.len())
+            .unwrap_or(0);
+
+        state_analysis.insert(state, StateAnalysis {
+            true_occurrences: true_count,
+            false_occurrences: false_count,
+        });
     }
 
     state_analysis

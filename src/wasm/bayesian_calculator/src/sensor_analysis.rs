@@ -1,4 +1,5 @@
-use crate::types::{HAHistoryEntry, TimePeriod, SensorChunk};
+use crate::types::{HAHistoryEntry, TimePeriod, SensorChunk, StateChunk, StateDurationStats};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -165,6 +166,114 @@ fn create_sensor_period_chunks(
     }
 
     chunks
+}
+
+/// Create state-based chunks using the same duration approach as numeric sensors
+pub fn create_state_period_chunks(
+    entity_history: &[HAHistoryEntry],
+    periods: &[TimePeriod],
+) -> Vec<StateChunk> {
+    if entity_history.is_empty() || periods.is_empty() {
+        return Vec::new();
+    }
+
+    let mut chunks = Vec::new();
+
+    // Cache timestamps and states
+    let mut history_cache: Vec<(i64, String)> = Vec::with_capacity(entity_history.len());
+    for entry in entity_history {
+        let timestamp = parse_timestamp(&entry.last_changed);
+        history_cache.push((timestamp, entry.state.clone()));
+    }
+
+    // Sort by timestamp
+    history_cache.sort_by_key(|&(time, _)| time);
+
+    // Process each period
+    for period in periods {
+        let period_start = parse_timestamp(&period.start);
+        let period_end = parse_timestamp(&period.end);
+
+        // Find relevant changes within the period
+        let mut relevant_timestamps: Vec<i64> = Vec::new();
+
+        for &(timestamp, _) in &history_cache {
+            if timestamp > period_start && timestamp < period_end {
+                relevant_timestamps.push(timestamp);
+            }
+        }
+
+        // Build time points
+        let mut time_points = vec![period_start];
+        time_points.extend(&relevant_timestamps);
+        time_points.push(period_end);
+
+        // Find initial state
+        let mut current_state: Option<String> = None;
+        for i in (0..history_cache.len()).rev() {
+            if history_cache[i].0 <= period_start {
+                current_state = Some(history_cache[i].1.clone());
+                break;
+            }
+        }
+
+        // Create chunks for this period
+        for i in 0..time_points.len() - 1 {
+            let chunk_start = time_points[i];
+            let chunk_end = time_points[i + 1];
+            let duration = chunk_end - chunk_start;
+
+            if duration < 1000 {
+                continue; // Skip chunks smaller than 1 second
+            }
+
+            // Update current state if there was a change
+            if i > 0 {
+                // Find the change at this timestamp
+                for &(timestamp, ref state) in &history_cache {
+                    if timestamp == time_points[i] {
+                        current_state = Some(state.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(ref state) = current_state {
+                chunks.push(StateChunk {
+                    state: state.clone(),
+                    duration,
+                    desired_output: period.is_true_period,
+                });
+            }
+        }
+    }
+
+    chunks
+}
+
+/// Analyze state chunks to get duration-based statistics for each state
+pub fn analyze_state_chunks(
+    entity_history: &[HAHistoryEntry],
+    periods: &[TimePeriod],
+) -> FxHashMap<String, StateDurationStats> {
+    let chunks = create_state_period_chunks(entity_history, periods);
+    let mut stats: FxHashMap<String, StateDurationStats> = FxHashMap::default();
+
+    for chunk in chunks {
+        let entry = stats.entry(chunk.state.clone()).or_insert(StateDurationStats {
+            state: chunk.state.clone(),
+            true_duration: 0,
+            false_duration: 0,
+        });
+
+        if chunk.desired_output {
+            entry.true_duration += chunk.duration;
+        } else {
+            entry.false_duration += chunk.duration;
+        }
+    }
+
+    stats
 }
 
 fn parse_timestamp(iso_string: &str) -> i64 {

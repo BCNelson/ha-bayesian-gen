@@ -6,18 +6,34 @@
     </div>
 
     <div class="simulator-controls">
-      <div class="time-range-selector">
-        <label>Sample Rate:</label>
-        <select v-model="selectedTimeRange" @change="runSimulation">
-          <option value="1h">1 min intervals</option>
-          <option value="6h">5 min intervals</option>
-          <option value="24h">15 min intervals</option>
-          <option value="3d">1 hour intervals</option>
-          <option value="7d">4 hour intervals</option>
-        </select>
-        <button @click="runSimulation" :disabled="isLoading" class="btn btn-secondary">
-          {{ isLoading ? 'Processing...' : 'Refresh' }}
-        </button>
+      <div class="controls-row">
+        <div class="time-range-selector">
+          <label>Sample Rate:</label>
+          <select v-model="selectedTimeRange" @change="runSimulation">
+            <option value="1h">1 min intervals</option>
+            <option value="6h">5 min intervals</option>
+            <option value="24h">15 min intervals</option>
+            <option value="3d">1 hour intervals</option>
+            <option value="7d">4 hour intervals</option>
+          </select>
+          <button @click="runSimulation" :disabled="isLoading" class="btn btn-secondary">
+            {{ isLoading ? 'Processing...' : 'Refresh' }}
+          </button>
+        </div>
+
+        <div class="sensor-selector">
+          <label>Show Sensor Values:</label>
+          <select v-model="selectedSensor" @change="updateChart">
+            <option value="">None</option>
+            <option 
+              v-for="obs in config.observations" 
+              :key="obs.entity_id" 
+              :value="obs.entity_id"
+            >
+              {{ obs.entity_id.split('.').pop() }}
+            </option>
+          </select>
+        </div>
       </div>
 
       <div v-if="simulationResult" class="simulation-stats">
@@ -45,6 +61,7 @@
         <div v-else-if="isLoading" class="loading-message">
           Loading historical data...
         </div>
+
 
         <div class="chart-container">
           <component
@@ -149,9 +166,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent, nextTick, shallowRef } from 'vue'
 import { SimulationService } from '../services/simulationService'
-import { createBayesianChartOptions, transformSimulationData } from '../utils/chartConfig'
+import { createBayesianChartOptions } from '../utils/chartConfig'
 import { formatDate as fmtDate, formatDuration } from '../utils/formatters'
-import type { BayesianSensorConfig } from '../types/bayesian'
+import type { BayesianSensorConfig, TimePeriod } from '../types/bayesian'
 import type { SimulationSummary } from '../services/cachedBayesianSimulator'
 
 const VueApexCharts = defineAsyncComponent(() => import('vue3-apexcharts'))
@@ -160,6 +177,7 @@ const props = defineProps<{
   config: BayesianSensorConfig
   cachedHistoricalData: Map<string, any[]>
   entityBuffer?: any // NEW: Optional buffer for high-performance simulation
+  periods?: TimePeriod[] // Time periods for desired state
 }>()
 
 onUnmounted(() => {
@@ -178,9 +196,10 @@ const threshold = computed(() => props.config.probability_threshold)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedTimeRange = ref('24h')
+const selectedSensor = ref('')
+const sensorDataRange = ref<{ min: number; max: number } | null>(null)
 const simulationInProgress = ref(false)
 const debounceTimer = ref<number | null>(null)
-
 
 const chartSeries = shallowRef([
   {
@@ -189,6 +208,10 @@ const chartSeries = shallowRef([
   },
   {
     name: 'Sensor State',
+    data: [] as Array<{ x: number; y: number }>
+  },
+  {
+    name: 'Desired State',
     data: [] as Array<{ x: number; y: number }>
   }
 ])
@@ -357,7 +380,9 @@ const runSimulation = async () => {
 const chartOptions = computed(() => 
   createBayesianChartOptions({
     height: 400,
-    threshold: props.config.probability_threshold
+    threshold: props.config.probability_threshold,
+    showSensorValues: !!selectedSensor.value,
+    sensorDataRange: sensorDataRange.value || undefined
   })
 )
 
@@ -366,12 +391,94 @@ const updateChart = () => {
   // Use nextTick to defer chart update to prevent blocking
   nextTick(() => {
     if (simulationResult.value) {
-      chartSeries.value = transformSimulationData(simulationResult.value.points)
+      // Create series based on whether we're showing sensor values
+      const baseSeries = []
+      
+      // Always add probability series (left axis)
+      baseSeries.push({
+        name: 'Probability',
+        data: simulationResult.value.points.map(point => ({
+          x: point.timestamp.getTime(),
+          y: point.probability * 100
+        })),
+        type: 'line'
+      })
+      
+      // Add sensor state series (left axis)
+      baseSeries.push({
+        name: 'Sensor State (ON/OFF)',
+        data: simulationResult.value.points.map(point => ({
+          x: point.timestamp.getTime(),
+          y: point.sensorState ? 100 : 0
+        })),
+        type: 'area'
+      })
+      
+      // Add desired state series if periods are provided
+      if (props.periods && props.periods.length > 0) {
+        const desiredStateData = simulationResult.value.points.map(point => {
+          const timestamp = point.timestamp.getTime()
+          const isInTruePeriod = props.periods?.some(period => 
+            period.isTruePeriod && 
+            timestamp >= period.start.getTime() && 
+            timestamp <= period.end.getTime()
+          )
+          return { x: timestamp, y: isInTruePeriod ? 90 : 10 }
+        })
+        
+        baseSeries.push({
+          name: 'Desired State',
+          data: desiredStateData,
+          type: 'area'
+        })
+      }
+      
+      // Add sensor value series if a sensor is selected
+      if (selectedSensor.value && props.cachedHistoricalData.has(selectedSensor.value)) {
+        const sensorData = props.cachedHistoricalData.get(selectedSensor.value) || []
+        const sensorValueData = sensorData
+          .filter(entry => {
+            const entryTime = new Date(entry.last_changed).getTime()
+            const simStart = simulationResult.value!.points[0]?.timestamp.getTime() || 0
+            const simEnd = simulationResult.value!.points[simulationResult.value!.points.length - 1]?.timestamp.getTime() || 0
+            return entryTime >= simStart && entryTime <= simEnd
+          })
+          .map(entry => ({
+            x: new Date(entry.last_changed).getTime(),
+            y: parseFloat(entry.state) || 0
+          }))
+          .filter(point => !isNaN(point.y))
+        
+        // Calculate data range for perfect scale fitting
+        if (sensorValueData.length > 0) {
+          const values = sensorValueData.map(point => point.y)
+          const min = Math.min(...values)
+          const max = Math.max(...values)
+          const padding = (max - min) * 0.02 // 2% padding
+          sensorDataRange.value = {
+            min: min - padding,
+            max: max + padding
+          }
+        } else {
+          sensorDataRange.value = null
+        }
+        
+        baseSeries.push({
+          name: `${selectedSensor.value.split('.').pop()} Value`,
+          data: sensorValueData,
+          type: 'line'
+        })
+      }
+      
+      // Reset sensor data range if no sensor is selected
+      if (!selectedSensor.value) {
+        sensorDataRange.value = null
+      }
+      
+      chartSeries.value = baseSeries
     }
   })
 }
-
-
 
 
 const calculateTimeOn = () => {
@@ -469,22 +576,36 @@ onMounted(() => {
   gap: 1rem;
 }
 
-.time-range-selector {
+.controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  width: 100%;
+}
+
+.time-range-selector,
+.sensor-selector {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.time-range-selector label {
+.time-range-selector label,
+.sensor-selector label {
   font-weight: 500;
   color: #333;
+  white-space: nowrap;
 }
 
-.time-range-selector select {
+.time-range-selector select,
+.sensor-selector select {
   padding: 0.5rem;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 0.95rem;
+  min-width: 140px;
 }
 
 
@@ -538,6 +659,7 @@ onMounted(() => {
   color: #d32f2f;
   background: #ffebee;
 }
+
 
 .chart-container {
   background: white;

@@ -328,6 +328,7 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
                     :ha-connection="haConnection"
                     :cached-historical-data="cachedHistoricalData"
                     :entity-buffer="entityBuffer"
+                    :periods="periods"
                     @config-updated="updateGeneratedConfig"
                   />
                   <template #fallback>

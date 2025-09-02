@@ -75,3 +75,17 @@ pub struct SensorChunk {
     pub duration: i64,
     pub desired_output: bool,
 }
+
+#[derive(Debug, Clone)]
+pub struct StateChunk {
+    pub state: String,
+    pub duration: i64,
+    pub desired_output: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct StateDurationStats {
+    pub state: String,
+    pub true_duration: i64,
+    pub false_duration: i64,
+}

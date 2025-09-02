@@ -136,12 +136,30 @@ impl BayesianCalculator {
                     });
                 }
             } else {
-                let segments = timeline::create_unified_timeline(entity_history, &periods);
-                let state_analysis = timeline::analyze_state_segments(&segments);
+                // Use duration-based approach for state sensors (same as numeric sensors)
+                let state_stats = sensor_analysis::analyze_state_chunks(entity_history, &periods);
 
-                for (state, analysis) in state_analysis.iter() {
-                    let prob_given_true = (analysis.true_occurrences as f64) / (true_periods.len() as f64);
-                    let prob_given_false = (analysis.false_occurrences as f64) / (false_periods.len() as f64);
+                // Calculate total durations for true and false periods
+                let mut total_true_duration = 0i64;
+                let mut total_false_duration = 0i64;
+                
+                for stats in state_stats.values() {
+                    total_true_duration += stats.true_duration;
+                    total_false_duration += stats.false_duration;
+                }
+
+                for (state, stats) in state_stats.iter() {
+                    let prob_given_true = if total_true_duration > 0 {
+                        (stats.true_duration as f64) / (total_true_duration as f64)
+                    } else {
+                        0.0
+                    };
+                    
+                    let prob_given_false = if total_false_duration > 0 {
+                        (stats.false_duration as f64) / (total_false_duration as f64)
+                    } else {
+                        0.0
+                    };
                     
                     // Preserve discrimination by scaling both probabilities proportionally
                     let (clamped_true, clamped_false) = clamp_preserve_discrimination(prob_given_true, prob_given_false);
@@ -153,8 +171,8 @@ impl BayesianCalculator {
                         prob_given_true: clamped_true,
                         prob_given_false: clamped_false,
                         discrimination_power,
-                        true_occurrences: analysis.true_occurrences,
-                        false_occurrences: analysis.false_occurrences,
+                        true_occurrences: if stats.true_duration > 0 { 1 } else { 0 }, // Convert duration to presence
+                        false_occurrences: if stats.false_duration > 0 { 1 } else { 0 }, // Convert duration to presence
                         total_true_periods: true_periods.len(),
                         total_false_periods: false_periods.len(),
                         numeric_stats: None,

@@ -70,6 +70,7 @@
             :config="currentConfig" 
             :cached-historical-data="cachedHistoricalData"
             :entity-buffer="entityBuffer"
+            :periods="periods"
           />
         </n-card>
       </n-collapse-transition>
@@ -172,6 +173,7 @@ const props = defineProps<{
   haConnection: any
   cachedHistoricalData: Map<string, any[]>
   entityBuffer?: any // NEW: Buffer for high-performance simulation
+  periods?: any[] // Time periods for desired state
 }>()
 
 const emit = defineEmits<{
