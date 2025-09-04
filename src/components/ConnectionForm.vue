@@ -36,10 +36,7 @@
           <n-text>Add this to your </n-text>
           <n-code>configuration.yaml</n-code>
           <n-text>:</n-text>
-          <n-code code="http:
-  cors_allowed_origins:
-    - &quot;http://localhost:5173&quot;
-    - &quot;http://127.0.0.1:5173&quot;" language="yaml" />
+          <n-code :code="corsYamlConfig" language="yaml" />
           <n-text>Then restart Home Assistant.</n-text>
         </n-alert>
       </n-collapse-item>
@@ -70,10 +67,7 @@
           <n-text>Add this to your Home Assistant </n-text>
           <n-code>configuration.yaml</n-code>
           <n-text>:</n-text>
-          <n-code code="http:
-  cors_allowed_origins:
-    - &quot;http://localhost:5173&quot;
-    - &quot;http://127.0.0.1:5173&quot;" language="yaml" />
+          <n-code :code="corsYamlConfig" language="yaml" />
           <n-text>Then restart Home Assistant and try connecting again.</n-text>
         </template>
       </n-alert>
@@ -96,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, reactive } from 'vue'
+import { ref, onMounted, watch, reactive, computed } from 'vue'
 import { 
   NForm, 
   NFormItem, 
@@ -132,6 +126,13 @@ const error = ref('')
 const formModel = reactive({
   url: '',
   token: ''
+})
+
+const corsYamlConfig = computed(() => {
+  const currentOrigin = window.location.origin
+  return `http:
+  cors_allowed_origins:
+    - "${currentOrigin}"`
 })
 
 const rules: FormRules = {
