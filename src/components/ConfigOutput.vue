@@ -70,6 +70,7 @@
             :config="currentConfig" 
             :cached-historical-data="cachedHistoricalData"
             :entity-buffer="entityBuffer"
+            :entity-status-map="entityStatusMap"
             :periods="periods"
           />
         </n-card>
@@ -173,6 +174,7 @@ const props = defineProps<{
   haConnection: any
   cachedHistoricalData: Map<string, any[]>
   entityBuffer?: any // NEW: Buffer for high-performance simulation
+  entityStatusMap?: Map<string, { status: string; message?: string }> // Entity analysis status
   periods?: any[] // Time periods for desired state
 }>()
 

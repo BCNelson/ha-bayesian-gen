@@ -26,7 +26,8 @@ export const useBayesianAnalysis = () => {
   const isAnalyzing = ref(false)
   const analysisError = ref<string | null>(null)
   const analysisProgress = ref({ current: 0, total: 0, currentEntity: '' })
-  const entityStatusMap = shallowRef<Map<string, { status: 'queued' | 'fetching' | 'fetched' | 'analyzing' | 'completed' | 'error', message?: string }>>(markRaw(new Map()))
+  const entityStatusMap = shallowRef<Map<string, { status: 'queued' | 'fetching' | 'fetched' | 'analyzing' | 'completed' | 'error', message?: string }>>(new Map())
+  const entityScores = shallowRef<Map<string, { score: number, reasons: string[] }>>(new Map())
   
   const calculator = new BayesianCalculator()
   const orchestrator = new AnalysisOrchestrator()
@@ -37,7 +38,10 @@ export const useBayesianAnalysis = () => {
       analysisProgress.value = progress
     },
     onEntityStatus: (entityId, status) => {
-      entityStatusMap.value.set(entityId, status)
+      console.log('Entity status update:', entityId, status.status)
+      const newMap = new Map(entityStatusMap.value)
+      newMap.set(entityId, status)
+      entityStatusMap.value = newMap
     },
     onResult: (newResults) => {
       // Add new results immediately and sort - create new array reference for shallow reactivity
@@ -53,6 +57,14 @@ export const useBayesianAnalysis = () => {
       cachedHistoricalData.value.set(entityId, history)
       // Trigger reactivity manually since Map is markRaw
       cachedHistoricalData.value = new Map(cachedHistoricalData.value)
+    },
+    onEntityScored: (scores) => {
+      entityScores.value = new Map(
+        Array.from(scores.entries()).map(([id, score]) => [
+          id,
+          { score: score.score, reasons: score.reasons }
+        ])
+      )
     }
   })
   
@@ -112,7 +124,7 @@ export const useBayesianAnalysis = () => {
     
     isAnalyzing.value = true
     analysisError.value = null
-    entityStatusMap.value.clear()
+    entityStatusMap.value = new Map()
     analyzedEntities.value = []
     
     try {
@@ -157,7 +169,8 @@ export const useBayesianAnalysis = () => {
     generatedConfig.value = null
     analysisError.value = null
     analysisProgress.value = { current: 0, total: 0, currentEntity: '' }
-    entityStatusMap.value.clear()
+    entityStatusMap.value = new Map()
+    entityScores.value = new Map()
     
     // Clear both buffer and legacy cache
     entityBuffer.clearAll()
@@ -175,6 +188,7 @@ export const useBayesianAnalysis = () => {
     analysisError,
     analysisProgress,
     entityStatusMap,
+    entityScores,
     canAnalyze,
     calculator,
     haConnection,

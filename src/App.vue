@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, defineAsyncComponent } from 'vue'
-import { NConfigProvider, NMessageProvider, NCard, NButton, NSpace, NAlert, NText, NList, NListItem, NTag, NTabs, NTabPane, NBadge } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NCard, NButton, NSpace, NAlert, NText, NList, NListItem, NTag, NTabs, NTabPane, NBadge, NSpin } from 'naive-ui'
 import { useBayesianAnalysis } from './composables/useBayesianAnalysis'
 // Lazy load components for better performance
 const ConnectionForm = defineAsyncComponent(() => import('./components/ConnectionForm.vue'))
+const EntityScoreDisplay = defineAsyncComponent(() => import('./components/EntityScoreDisplay.vue'))
 const TimePeriodSelector = defineAsyncComponent(() => import('./components/TimePeriodSelector.vue')) 
 const EntityAnalyzer = defineAsyncComponent(() => import('./components/EntityAnalyzer.vue'))
 const ConfigOutput = defineAsyncComponent(() => import('./components/ConfigOutput.vue'))
@@ -159,20 +160,34 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
                   <n-text depth="3">Establish connection to fetch entity data</n-text>
                 </template>
                 
-                <Suspense>
-                  <ConnectionForm 
-                    :is-connected="isConnected"
-                    :connection-error="connectionError"
-                    :is-auto-connecting="isAutoConnecting"
-                    @connect="handleConnect"
-                    @connection-status="handleConnectionStatus"
-                  />
-                  <template #fallback>
-                    <n-space justify="center" style="padding: 2rem">
-                      <n-spin size="large" />
-                    </n-space>
-                  </template>
-                </Suspense>
+                <n-space vertical size="large">
+                  <Suspense>
+                    <ConnectionForm 
+                      :is-connected="isConnected"
+                      :connection-error="connectionError"
+                      :is-auto-connecting="isAutoConnecting"
+                      @connect="handleConnect"
+                      @connection-status="handleConnectionStatus"
+                    />
+                    <template #fallback>
+                      <n-space justify="center" style="padding: 2rem">
+                        <n-spin size="large" />
+                      </n-space>
+                    </template>
+                  </Suspense>
+                  
+                  <Suspense>
+                    <EntityScoreDisplay 
+                      v-if="isConnected && entities.length > 0"
+                      :entities="entities"
+                    />
+                    <template #fallback>
+                      <div v-if="isConnected && entities.length > 0">
+                        <n-spin size="small" />
+                      </div>
+                    </template>
+                  </Suspense>
+                </n-space>
               </n-card>
             </n-tab-pane>
             
@@ -328,6 +343,7 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
                     :ha-connection="haConnection"
                     :cached-historical-data="cachedHistoricalData"
                     :entity-buffer="entityBuffer"
+                    :entity-status-map="entityStatusMap"
                     :periods="periods"
                     @config-updated="updateGeneratedConfig"
                   />

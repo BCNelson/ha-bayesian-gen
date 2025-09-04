@@ -86,18 +86,30 @@
       </div>
 
       <div class="observations-section">
-        <h4>Entity Status During Simulation</h4>
-        <div v-if="!simulationResult" class="no-data">
-          Run simulation to see entity states
+        <h4>Entity Configuration & Status</h4>
+        <div v-if="!config || !config.observations || config.observations.length === 0" class="no-data">
+          No entities configured
         </div>
         <div v-else class="observations-list">
           <div
             v-for="obs in config.observations"
             :key="obs.entity_id"
             class="observation-item"
+            :class="{ 'has-data': cachedHistoricalData.has(obs.entity_id) }"
           >
             <div class="observation-info">
-              <span class="entity-id">{{ obs.entity_id }}</span>
+              <div class="entity-header">
+                <span class="entity-id">{{ obs.entity_id }}</span>
+                <span v-if="entityStatusMap && entityStatusMap.has(obs.entity_id)" class="entity-status" :class="`status-${entityStatusMap.get(obs.entity_id)?.status}`">
+                  {{ entityStatusMap.get(obs.entity_id)?.status }}
+                </span>
+                <span v-else-if="cachedHistoricalData.has(obs.entity_id)" class="entity-status status-ready">
+                  data available
+                </span>
+                <span v-else class="entity-status status-no-data">
+                  no data
+                </span>
+              </div>
               <span class="platform">{{ obs.platform }}</span>
             </div>
             
@@ -141,7 +153,12 @@
               <div class="observation-summary">
                 <span class="summary-label">Active:</span>
                 <span class="summary-value">
-                  {{ getObservationActivePercentage(obs.entity_id) }}% of time
+                  <template v-if="simulationResult">
+                    {{ getObservationActivePercentage(obs.entity_id) }}% of time
+                  </template>
+                  <template v-else>
+                    Run simulation to see
+                  </template>
                 </span>
               </div>
             </div>
@@ -177,6 +194,7 @@ const props = defineProps<{
   config: BayesianSensorConfig
   cachedHistoricalData: Map<string, any[]>
   entityBuffer?: any // NEW: Optional buffer for high-performance simulation
+  entityStatusMap?: Map<string, { status: string; message?: string }> // Entity analysis status
   periods?: TimePeriod[] // Time periods for desired state
 }>()
 
@@ -497,10 +515,10 @@ const calculateTimeOn = () => {
 }
 
 const getObservationActivePercentage = (entityId: string) => {
-  if (!simulationResult.value) return 0
+  if (!simulationResult.value) return '—'
   
   const totalPoints = simulationResult.value.points.length
-  if (totalPoints === 0) return 0
+  if (totalPoints === 0) return '—'
   
   const activePoints = simulationResult.value.points.filter(point => 
     point.activeObservations.includes(entityId)
@@ -749,6 +767,10 @@ onMounted(() => {
   background: #e8f5e9;
 }
 
+.observation-item.has-data {
+  border-color: #2196F3;
+}
+
 .observation-info {
   display: flex;
   flex-direction: column;
@@ -756,11 +778,67 @@ onMounted(() => {
   margin-bottom: 0.5rem;
 }
 
+.entity-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .entity-id {
   font-family: monospace;
   font-size: 0.85rem;
   color: #333;
   word-break: break-all;
+}
+
+.entity-status {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.entity-status.status-queued {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.entity-status.status-fetching {
+  background: #fff3e0;
+  color: #ff6f00;
+}
+
+.entity-status.status-fetched {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.entity-status.status-analyzing {
+  background: #fce4ec;
+  color: #c2185b;
+}
+
+.entity-status.status-completed {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.entity-status.status-error {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.entity-status.status-ready {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.entity-status.status-no-data {
+  background: #fafafa;
+  color: #999;
 }
 
 .platform {

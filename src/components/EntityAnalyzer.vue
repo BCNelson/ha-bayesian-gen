@@ -1,48 +1,80 @@
 <template>
   <n-space vertical size="large">
-    <div v-if="isAnalyzing">
-      <n-space vertical align="center">
-        <n-spin size="large" />
-        <n-text>Analyzing entity states across time periods...</n-text>
-      </n-space>
+    <!-- Unified Analysis Status Card -->
+    <n-card v-if="isAnalyzing || analyzedEntities.length > 0" style="margin-bottom: 1rem">
+      <template #header>
+        <n-space justify="space-between" align="center">
+          <n-text strong>Analysis Status</n-text>
+          <n-button 
+            v-if="pendingEntityStatusMap.size > 0"
+            size="small" 
+            @click="showProcessingQueue = !showProcessingQueue"
+            :type="showProcessingQueue ? 'primary' : 'default'"
+          >
+            {{ showProcessingQueue ? 'Hide' : 'Show' }} Queue ({{ pendingEntityStatusMap.size }})
+          </n-button>
+        </n-space>
+      </template>
       
+      <!-- Progress Bar -->
       <n-progress
         v-if="analysisProgress.total > 0"
         type="line"
         :percentage="Math.round((analysisProgress.current / analysisProgress.total) * 100)"
-        :show-indicator="false"
-        style="margin: 1rem 0"
+        :indicator-placement="'inside'"
+        style="margin-bottom: 1rem"
       />
       
-      <n-space justify="center" style="margin-bottom: 1rem">
-        <n-text depth="3">
-          Processing {{ analysisProgress.current }} / {{ analysisProgress.total }} entities
+      <!-- Status Summary -->
+      <n-space vertical size="small">
+        <n-space align="center">
+          <n-spin v-if="isAnalyzing" size="small" />
+          <n-text>
+            <template v-if="isAnalyzing">
+              Processing {{ analysisProgress.current }} / {{ analysisProgress.total }} entities
+              <span v-if="analysisProgress.currentEntity"> • Current: {{ analysisProgress.currentEntity }}</span>
+            </template>
+            <template v-else-if="analyzedEntities.length > 0">
+              Analyzed {{ totalEntities }} entities across {{ periods.length }} time periods
+            </template>
+          </n-text>
+        </n-space>
+        
+        <n-text v-if="analyzedEntities.length > 0">
+          Found <n-text strong>{{ groupedEntities.length }}</n-text> entities with 
+          <n-text strong>{{ analyzedEntities.length }}</n-text> total state combinations
         </n-text>
       </n-space>
       
-      <n-text 
-        v-if="analysisProgress.currentEntity" 
-        depth="3"
-        tag="div"
-        style="text-align: center; font-family: monospace; font-size: 0.9rem"
-      >
-        Current: {{ analysisProgress.currentEntity }}
-      </n-text>
-      
-      <!-- Show completed results immediately during analysis -->
-      <n-alert 
-        v-if="analyzedEntities.length > 0" 
-        type="info"
-        style="margin: 1.5rem 0"
-      >
-        <n-text>Found </n-text>
-        <n-text strong>{{ analyzedEntities.length }}</n-text>
-        <n-text> state combinations from </n-text>
-        <n-text strong>{{ analysisProgress.current }}</n-text>
-        <n-text> completed entities</n-text>
-        <br />
-        <n-text italic depth="3">Results appear as entities are analyzed. Analysis continues in the background...</n-text>
-      </n-alert>
+      <!-- Expandable Processing Queue -->
+      <n-collapse-transition v-if="pendingEntityStatusMap.size > 0" :show="showProcessingQueue">
+        <n-divider style="margin: 1rem 0 0.5rem 0" />
+        <n-text depth="3" style="display: block; margin-bottom: 0.5rem">Processing Queue:</n-text>
+        <n-grid :cols="3" :x-gap="8" :y-gap="8" responsive="screen" style="max-height: 200px; overflow-y: auto">
+          <n-grid-item 
+            v-for="[entityId, status] in pendingEntityStatusMap" 
+            :key="entityId"
+            :span="1"
+          >
+            <n-tag
+              :type="getStatusType(status.status)"
+              style="width: 100%"
+            >
+              <n-ellipsis style="max-width: 150px">
+                {{ entityId }}
+              </n-ellipsis>
+              <template #icon>
+                <n-text depth="3" style="margin-left: 0.5rem">
+                  {{ status.status }}
+                </n-text>
+              </template>
+            </n-tag>
+          </n-grid-item>
+        </n-grid>
+      </n-collapse-transition>
+    </n-card>
+
+    <div v-if="isAnalyzing">
       
       <!-- Filter controls available during analysis -->
       <n-space v-if="analyzedEntities.length > 0" style="margin-bottom: 1.5rem">
@@ -69,31 +101,6 @@
           @toggle-selection="toggleEntitySelection"
         />
       </div>
-      
-      <!-- Show status cards for entities not yet analyzed -->
-      <n-card v-if="pendingEntityStatusMap.size > 0" title="Processing Queue" style="margin-top: 2rem">
-        <n-grid :cols="3" :x-gap="8" :y-gap="8" responsive="screen" style="max-height: 200px; overflow-y: auto">
-          <n-grid-item 
-            v-for="[entityId, status] in pendingEntityStatusMap" 
-            :key="entityId"
-            :span="1"
-          >
-            <n-tag
-              :type="getStatusType(status.status)"
-              style="width: 100%"
-            >
-              <n-ellipsis style="max-width: 150px">
-                {{ entityId }}
-              </n-ellipsis>
-              <template #icon>
-                <n-text depth="3" style="margin-left: 0.5rem">
-                  {{ status.status }}
-                </n-text>
-              </template>
-            </n-tag>
-          </n-grid-item>
-        </n-grid>
-      </n-card>
     </div>
     
     <n-alert v-else-if="error" type="error">
@@ -101,21 +108,6 @@
     </n-alert>
     
     <div v-else-if="analyzedEntities.length > 0">
-      <n-alert type="info" style="margin-bottom: 1.5rem">
-        <n-text>Analyzed </n-text>
-        <n-text strong>{{ totalEntities }}</n-text>
-        <n-text> entities across </n-text>
-        <n-text strong>{{ periods.length }}</n-text>
-        <n-text> time periods</n-text>
-        <br />
-        <n-text>Found </n-text>
-        <n-text strong>{{ groupedEntities.length }}</n-text>
-        <n-text> entities with </n-text>
-        <n-text strong>{{ analyzedEntities.length }}</n-text>
-        <n-text> total state combinations</n-text>
-        <br />
-        <n-text italic depth="3">Entities are grouped by ID. Each entity may have multiple states that behave differently during your TRUE/FALSE periods.</n-text>
-      </n-alert>
       
       <n-space style="margin-bottom: 1.5rem">
         <n-input
@@ -207,7 +199,9 @@ import {
   NTag,
   NEllipsis,
   NOl,
-  NLi
+  NLi,
+  NCollapseTransition,
+  NDivider
 } from 'naive-ui'
 import type { EntityProbability, TimePeriod } from '../types/bayesian'
 import EntityCard from './EntityCard.vue'
@@ -229,6 +223,7 @@ const emit = defineEmits<{
 const searchFilter = ref('')
 const minDiscrimination = ref(0.3)
 const selectedEntities = shallowRef<EntityProbability[]>([])
+const showProcessingQueue = ref(false)
 
 const discriminationOptions = [
   { label: 'All discrimination levels', value: 0 },

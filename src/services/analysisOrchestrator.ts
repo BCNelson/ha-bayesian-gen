@@ -8,6 +8,7 @@ interface IHomeAssistantAPI {
 }
 import { WorkerPool } from './workerPool'
 import { EntityFetcher } from './entityFetcher'
+import { EntityScorer, type EntityScore } from './entityScorer'
 
 export interface AnalysisProgress {
   current: number
@@ -25,16 +26,19 @@ export interface AnalysisCallbacks {
   onEntityStatus?: (entityId: string, status: EntityStatus) => void
   onResult?: (results: EntityProbability[]) => void
   onEntityFetched?: (entityId: string, history: any[]) => void
+  onEntityScored?: (scores: Map<string, EntityScore>) => void
 }
 
 export class AnalysisOrchestrator {
   private workerPool: WorkerPool
   private entityFetcher: EntityFetcher
+  private entityScorer: EntityScorer
   private callbacks: AnalysisCallbacks = {}
 
   constructor() {
     this.workerPool = new WorkerPool()
     this.entityFetcher = new EntityFetcher()
+    this.entityScorer = new EntityScorer()
     
     // Set up worker progress callback
     this.workerPool.setProgressCallback((entityId, status, message) => {
@@ -52,7 +56,7 @@ export class AnalysisOrchestrator {
     periods: TimePeriod[],
     selectedEntityIds?: string[]
   ): Promise<EntityProbability[]> {
-    const relevantEntityIds = this.getRelevantEntityIds(entities, selectedEntityIds)
+    const relevantEntityIds = this.getScoredAndSortedEntityIds(entities, selectedEntityIds)
     const allResults: EntityProbability[] = []
     let completedCount = 0
     
@@ -169,25 +173,26 @@ export class AnalysisOrchestrator {
     }
   }
 
-  private getRelevantEntityIds(entities: HAEntity[], selectedEntityIds?: string[]): string[] {
-    if (selectedEntityIds && selectedEntityIds.length > 0) {
-      return selectedEntityIds
-    }
-
-    return entities
-      .filter(entity => {
-        const domain = entity.entity_id.split('.')[0]
-        const excludedDomains = [
-          'automation', 'script', 'scene', 'group', 'zone', 
-          'update', 'button', 'persistent_notification'
-        ]
-        return !excludedDomains.includes(domain) &&
-               entity.state !== 'unavailable' &&
-               entity.state !== 'unknown' &&
-               entity.state !== ''
+  private getScoredAndSortedEntityIds(entities: HAEntity[], selectedEntityIds?: string[]): string[] {
+    const sortedIds = this.entityScorer.filterAndSortEntities(entities, selectedEntityIds)
+    
+    const scores = this.entityScorer.getScoresForEntities(
+      entities.filter(e => sortedIds.includes(e.entity_id))
+    )
+    this.callbacks.onEntityScored?.(scores)
+    
+    console.log(`Scored and sorted ${sortedIds.length} entities for analysis`)
+    if (sortedIds.length > 0) {
+      const topScores = Array.from(scores.values()).slice(0, 5)
+      console.log('Top 5 entities by score:')
+      topScores.forEach(score => {
+        console.log(`  ${score.entityId}: ${score.score} (${score.reasons.join(', ')})`)
       })
-      .map(entity => entity.entity_id)
+    }
+    
+    return sortedIds
   }
+
 
   private initializeProgress(entityIds: string[]) {
     entityIds.forEach(entityId => {
