@@ -261,7 +261,6 @@ pub fn analyze_state_chunks(
 
     for chunk in chunks {
         let entry = stats.entry(chunk.state.clone()).or_insert(StateDurationStats {
-            state: chunk.state.clone(),
             true_duration: 0,
             false_duration: 0,
         });

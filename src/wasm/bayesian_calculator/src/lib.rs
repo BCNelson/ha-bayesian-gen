@@ -1,7 +1,6 @@
 mod types;
 mod sensor_analysis;
 mod threshold;
-mod timeline;
 
 use wasm_bindgen::prelude::*;
 use types::{EntityProbability, TimePeriod, HAHistoryEntry};
