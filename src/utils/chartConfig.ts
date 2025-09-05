@@ -146,11 +146,6 @@ export const createBayesianChartOptions = (config: ChartConfig) => {
   }
   }
   
-  // Add series-to-axis mapping when showing sensor values
-  if (config.showSensorValues) {
-    options.chart.group = 'bayesian-chart'
-  }
-  
   return options
 }
 
