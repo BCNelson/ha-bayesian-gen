@@ -66,13 +66,11 @@ import {
   startOfWeek, 
   endOfWeek, 
   addWeeks, 
-  eachDayOfInterval,
-  startOfDay,
-  endOfDay
+  eachDayOfInterval
 } from 'date-fns'
 import CalendarDay from './CalendarDay.vue'
 import type { TimePeriod } from '../../types/bayesian'
-import { detectRangeConflicts, snapToInterval } from '../../utils/rangeUtils'
+import { detectRangeConflicts } from '../../utils/rangeUtils'
 
 interface SelectionData {
   dayIndex: number
@@ -172,14 +170,6 @@ const formatHour = (hour: number) => {
   return format(new Date().setHours(hour, 0, 0, 0), 'HH:mm')
 }
 
-const getPeriodsForDay = (dateStr: string) => {
-  const dayStart = startOfDay(new Date(dateStr))
-  const dayEnd = endOfDay(new Date(dateStr))
-  
-  return props.periods.filter(period => 
-    period.start < dayEnd && period.end > dayStart
-  )
-}
 
 const startSelection = (data: SelectionData) => {
   if (weekDays.value[data.dayIndex]?.date > now) return

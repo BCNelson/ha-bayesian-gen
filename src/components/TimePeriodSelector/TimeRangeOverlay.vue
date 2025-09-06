@@ -47,7 +47,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { format, startOfDay, isSameDay, differenceInMinutes } from 'date-fns'
+import { format, isSameDay, differenceInMinutes } from 'date-fns'
 import type { TimePeriod } from '../../types/bayesian'
 
 const props = defineProps<{
@@ -137,20 +137,6 @@ const overlayStyle = computed(() => {
   return style
 })
 
-const formatTimeRange = (start: Date, end: Date): string => {
-  if (isSameDay(start, end)) {
-    return `${format(start, 'HH:mm')}-${format(end, 'HH:mm')}`
-  }
-  
-  // Multi-day range
-  if (isSameDay(start, props.date)) {
-    return `${format(start, 'HH:mm')}-24:00`
-  } else if (isSameDay(end, props.date)) {
-    return `00:00-${format(end, 'HH:mm')}`
-  } else {
-    return 'All Day'
-  }
-}
 
 const formatFullTimeRange = (start: Date, end: Date): string => {
   if (isSameDay(start, end)) {
@@ -173,10 +159,6 @@ const formatDuration = (start: Date, end: Date): string => {
   }
 }
 
-const handleClick = (event: MouseEvent) => {
-  event.stopPropagation()
-  // Don't emit click event - clicking periods doesn't remove them
-}
 
 const handleMouseEnter = async () => {
   showTooltip.value = true
