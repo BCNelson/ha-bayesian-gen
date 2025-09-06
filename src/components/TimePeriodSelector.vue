@@ -5,6 +5,7 @@
         <n-radio-button value="single">Single</n-radio-button>
         <n-radio-button value="bulk">Bulk</n-radio-button>
         <n-radio-button value="timeline">Timeline</n-radio-button>
+        <n-radio-button value="calendar">Calendar</n-radio-button>
       </n-radio-group>
       
       <n-radio-group v-model:value="currentState" size="small">
@@ -46,6 +47,16 @@
         @period-added="addPeriod"
         @bulk-mark-remaining="markAllRemainingAs"
       />
+
+      <CalendarTimelineView 
+        v-if="mode === 'calendar'"
+        :current-state="currentState"
+        :periods="periods"
+        @period-added="addPeriod"
+        @period-removed="removePeriod"
+        @period-updated="updatePeriod"
+        @periods-updated="handlePeriodsUpdated"
+      />
     </div>
     
     <ConfigurationManager 
@@ -57,7 +68,7 @@
 
     <PeriodsList 
       :periods="periods"
-      :allow-bulk-actions="mode === 'timeline'"
+      :allow-bulk-actions="mode === 'timeline' || mode === 'calendar'"
       @period-removed="removePeriod"
       @mark-all-remaining-as="markAllRemainingAs"
       @clear-all-periods="clearAllPeriods"
@@ -67,11 +78,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { format } from 'date-fns'
 import { 
-  NSpace, 
-  NCard, 
-  NAlert, 
   NText, 
   NRadioGroup, 
   NRadio,
@@ -80,30 +87,38 @@ import {
 import SinglePeriodMode from './TimePeriodSelector/SinglePeriodMode.vue'
 import BulkPeriodMode from './TimePeriodSelector/BulkPeriodMode.vue'
 import TimelineMode from './TimePeriodSelector/TimelineMode.vue'
+import CalendarTimelineView from './TimePeriodSelector/CalendarTimelineView.vue'
 import ConfigurationManager from './TimePeriodSelector/ConfigurationManager.vue'
 import PeriodsList from './TimePeriodSelector/PeriodsList.vue'
 import type { TimePeriod } from '../types/bayesian'
+import { mergeAdjacentPeriods } from '../utils/rangeUtils'
 
 const emit = defineEmits<{
   periodsUpdated: [periods: TimePeriod[]]
 }>()
 
 const periods = ref<TimePeriod[]>([])
-const mode = ref<'single' | 'bulk' | 'timeline'>('single')
+const mode = ref<'single' | 'bulk' | 'timeline' | 'calendar'>('calendar')
 const currentState = ref(true)
 const timelineRef = ref<InstanceType<typeof TimelineMode>>()
 const configManagerRef = ref<InstanceType<typeof ConfigurationManager>>()
 
 const addPeriod = (period: TimePeriod) => {
   periods.value.push(period)
-  mergeAdjacentPeriods()
+  periods.value = mergeAdjacentPeriods(periods.value)
   autoSave()
   emit('periodsUpdated', periods.value)
 }
 
 const addPeriods = (newPeriods: TimePeriod[]) => {
   periods.value.push(...newPeriods)
-  mergeAdjacentPeriods()
+  periods.value = mergeAdjacentPeriods(periods.value)
+  autoSave()
+  emit('periodsUpdated', periods.value)
+}
+
+const handlePeriodsUpdated = (newPeriods: TimePeriod[]) => {
+  periods.value = mergeAdjacentPeriods(newPeriods)
   autoSave()
   emit('periodsUpdated', periods.value)
 }
@@ -112,6 +127,16 @@ const removePeriod = (id: string) => {
   periods.value = periods.value.filter(p => p.id !== id)
   autoSave()
   emit('periodsUpdated', periods.value)
+}
+
+const updatePeriod = (updatedPeriod: TimePeriod) => {
+  const index = periods.value.findIndex(p => p.id === updatedPeriod.id)
+  if (index !== -1) {
+    periods.value[index] = updatedPeriod
+    periods.value = mergeAdjacentPeriods(periods.value)
+    autoSave()
+    emit('periodsUpdated', periods.value)
+  }
 }
 
 const markAllRemainingAs = () => {
@@ -136,55 +161,6 @@ const createNewConfig = () => {
   emit('periodsUpdated', periods.value)
 }
 
-const mergeAdjacentPeriods = () => {
-  if (periods.value.length < 2) return
-
-  const sortedPeriods = [...periods.value].sort((a: TimePeriod, b: TimePeriod) => a.start.getTime() - b.start.getTime())
-  const mergedPeriods: TimePeriod[] = []
-  
-  for (const currentPeriod of sortedPeriods) {
-    let wasmerged = false
-    
-    if (mergedPeriods.length > 0) {
-      const lastPeriod = mergedPeriods[mergedPeriods.length - 1]
-      
-      if (currentPeriod.isTruePeriod === lastPeriod.isTruePeriod) {
-        const currentStart = currentPeriod.start.getTime()
-        const currentEnd = currentPeriod.end.getTime()
-        const lastStart = lastPeriod.start.getTime()
-        const lastEnd = lastPeriod.end.getTime()
-        
-        if (
-          (currentStart <= lastEnd + 60000) && // Current starts within 1 minute of last ending
-          (currentStart >= lastEnd - 60000)    // But not too far before last ending
-        ) {
-          const newStart = new Date(Math.min(currentStart, lastStart))
-          const newEnd = new Date(Math.max(currentEnd, lastEnd))
-          
-          const mergedLabel = `${format(newStart, 'MMM d HH:mm')} - ${format(newEnd, 'HH:mm')}`
-          
-          mergedPeriods[mergedPeriods.length - 1] = {
-            id: lastPeriod.id, // Keep the original ID
-            start: newStart,
-            end: newEnd,
-            isTruePeriod: lastPeriod.isTruePeriod,
-            label: mergedLabel
-          }
-          
-          wasmerged = true
-        }
-      }
-    }
-    
-    if (!wasmerged) {
-      mergedPeriods.push(currentPeriod)
-    }
-  }
-  
-  if (mergedPeriods.length !== periods.value.length) {
-    periods.value = mergedPeriods
-  }
-}
 
 const autoSave = () => {
   if (configManagerRef.value) {
