@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, defineAsyncComponent } from 'vue'
-import { NConfigProvider, NMessageProvider, NCard, NButton, NSpace, NAlert, NText, NList, NListItem, NTag, NTabs, NTabPane, NBadge, NSpin } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NButton, NSpace, NAlert, NText, NList, NListItem, NTag, NTabs, NTabPane, NSpin } from 'naive-ui'
 import { useBayesianAnalysis } from './composables/useBayesianAnalysis'
 // Lazy load components for better performance
 const ConnectionForm = defineAsyncComponent(() => import('./components/ConnectionForm.vue'))
@@ -123,44 +123,77 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
   <n-config-provider>
     <n-message-provider>
       <div class="app">
-        <header>
-          <h1>Home Assistant Bayesian Sensor Generator</h1>
-          <n-text depth="3">Generate optimized Bayesian sensor configurations based on your historical data</n-text>
+        <header class="minimal-header">
+          <div class="header-content">
+            <h1 class="app-title">HA Bayesian Generator</h1>
+            <n-tabs 
+              v-model:value="activeTab" 
+              type="line" 
+              size="medium"
+              animated
+              class="header-tabs"
+            >
+              <!-- Step 1: Connection -->
+              <n-tab-pane 
+                name="connection" 
+                :disabled="tabStates.connection.disabled"
+              >
+                <template #tab>
+                  <span class="tab-label">
+                    <span v-if="tabStates.connection.completed" class="tab-icon">✓</span>
+                    Connect
+                  </span>
+                </template>
+              </n-tab-pane>
+              
+              <!-- Step 2: Time Periods -->
+              <n-tab-pane 
+                name="periods" 
+                :disabled="tabStates.periods.disabled"
+              >
+                <template #tab>
+                  <span class="tab-label">
+                    <span v-if="tabStates.periods.completed" class="tab-icon">✓</span>
+                    Periods
+                  </span>
+                </template>
+              </n-tab-pane>
+              
+              <!-- Step 3: Analysis -->
+              <n-tab-pane 
+                name="analysis" 
+                :disabled="tabStates.analysis.disabled"
+              >
+                <template #tab>
+                  <span class="tab-label">
+                    <span v-if="tabStates.analysis.completed" class="tab-icon">✓</span>
+                    Analyze
+                    <span v-if="analyzedEntities.length > 0" class="tab-count">{{ analyzedEntities.length }}</span>
+                  </span>
+                </template>
+              </n-tab-pane>
+              
+              <!-- Step 4: Configuration -->
+              <n-tab-pane 
+                name="config" 
+                :disabled="tabStates.config.disabled"
+              >
+                <template #tab>
+                  <span class="tab-label">
+                    <span v-if="tabStates.config.completed" class="tab-icon">✓</span>
+                    Config
+                  </span>
+                </template>
+              </n-tab-pane>
+            </n-tabs>
+          </div>
         </header>
         
-        <main>
-          <n-tabs 
-            v-model:value="activeTab" 
-            type="card" 
-            size="large"
-            animated
-            class="main-tabs"
-          >
-            <!-- Step 1: Connection -->
-            <n-tab-pane 
-              name="connection" 
-              :disabled="tabStates.connection.disabled"
-              class="tab-pane"
-            >
-              <template #tab>
-                <div class="tab-header">
-                  <n-badge 
-                    :value="tabStates.connection.badge"
-                    :type="tabStates.connection.completed ? 'success' : 'default'"
-                    :show="true"
-                  >
-                    {{ tabStates.connection.title }}
-                  </n-badge>
-                </div>
-              </template>
-              
-              <n-card :bordered="false" class="tab-content">
-                <template #header>
-                  <h2>Connect to Home Assistant</h2>
-                  <n-text depth="3">Establish connection to fetch entity data</n-text>
-                </template>
-                
-                <n-space vertical size="large">
+        <main class="main-content">
+          <div class="content-wrapper">
+            <!-- Connection Panel -->
+            <div v-show="activeTab === 'connection'" class="panel-content">
+              <n-space vertical size="medium">
                   <Suspense>
                     <ConnectionForm 
                       :is-connected="isConnected"
@@ -187,70 +220,24 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
                       </div>
                     </template>
                   </Suspense>
-                </n-space>
-              </n-card>
-            </n-tab-pane>
+              </n-space>
+            </div>
             
-            <!-- Step 2: Time Periods -->
-            <n-tab-pane 
-              name="periods" 
-              :disabled="tabStates.periods.disabled"
-              class="tab-pane"
-            >
-              <template #tab>
-                <div class="tab-header">
-                  <n-badge 
-                    :value="tabStates.periods.badge"
-                    :type="tabStates.periods.completed ? 'success' : 'default'"
-                    :show="true"
-                  >
-                    {{ tabStates.periods.title }}
-                  </n-badge>
-                </div>
-              </template>
-              
-              <n-card :bordered="false" class="tab-content">
-                <template #header>
-                  <h2>Define Time Periods</h2>
-                  <n-text depth="3">Set when your sensor should be TRUE or FALSE</n-text>
+            <!-- Periods Panel -->
+            <div v-show="activeTab === 'periods'" class="panel-content periods-panel">
+              <Suspense>
+                <TimePeriodSelector @periods-updated="handlePeriodsUpdate" />
+                <template #fallback>
+                  <n-space justify="center" style="padding: 2rem">
+                    <n-spin size="large" />
+                  </n-space>
                 </template>
-                
-                <Suspense>
-                  <TimePeriodSelector @periods-updated="handlePeriodsUpdate" />
-                  <template #fallback>
-                    <n-space justify="center" style="padding: 2rem">
-                      <n-spin size="large" />
-                    </n-space>
-                  </template>
-                </Suspense>
-              </n-card>
-            </n-tab-pane>
+              </Suspense>
+            </div>
             
-            <!-- Step 3: Analysis -->
-            <n-tab-pane 
-              name="analysis" 
-              :disabled="tabStates.analysis.disabled"
-              class="tab-pane"
-            >
-              <template #tab>
-                <div class="tab-header">
-                  <n-badge 
-                    :value="tabStates.analysis.badge"
-                    :type="tabStates.analysis.completed ? 'success' : 'default'"
-                    :show="true"
-                  >
-                    {{ tabStates.analysis.title }}
-                  </n-badge>
-                </div>
-              </template>
-              
-              <n-card :bordered="false" class="tab-content">
-                <template #header>
-                  <h2>Analyze Entities</h2>
-                  <n-text depth="3">Find the best entities for your Bayesian sensor</n-text>
-                </template>
-                
-                <n-space vertical align="center" class="analyze-section">
+            <!-- Analysis Panel -->
+            <div v-show="activeTab === 'analysis'" class="panel-content">
+              <n-space vertical class="analyze-section">
                   <n-button
                     @click="handleAnalyze"
                     :disabled="!canAnalyze || isAnalyzing"
@@ -290,72 +277,48 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
                       </n-list-item>
                     </n-list>
                   </n-alert>
-                </n-space>
-                
-                <Suspense>
-                  <EntityAnalyzer 
-                    :analyzed-entities="analyzedEntities"
-                    :periods="periods"
-                    :is-analyzing="isAnalyzing"
-                    :error="analysisError"
-                    :total-entities="entities.length"
-                    :analysis-progress="analysisProgress"
-                    :entity-status-map="entityStatusMap"
-                    @entities-selected="handleEntitiesSelected"
-                  />
-                  <template #fallback>
-                    <n-space justify="center" style="padding: 2rem">
-                      <n-spin size="large" />
-                    </n-space>
-                  </template>
-                </Suspense>
-              </n-card>
-            </n-tab-pane>
-            
-            <!-- Step 4: Configuration -->
-            <n-tab-pane 
-              name="config" 
-              :disabled="tabStates.config.disabled"
-              class="tab-pane"
-            >
-              <template #tab>
-                <div class="tab-header">
-                  <n-badge 
-                    :value="tabStates.config.badge"
-                    :type="tabStates.config.completed ? 'success' : 'default'"
-                    :show="true"
-                  >
-                    {{ tabStates.config.title }}
-                  </n-badge>
-                </div>
-              </template>
+              </n-space>
               
-              <n-card :bordered="false" class="tab-content">
-                <template #header>
-                  <h2>Configuration & Testing</h2>
-                  <n-text depth="3">Generate YAML config and test with historical data</n-text>
+              <Suspense>
+                <EntityAnalyzer 
+                  :analyzed-entities="analyzedEntities"
+                  :periods="periods"
+                  :is-analyzing="isAnalyzing"
+                  :error="analysisError"
+                  :total-entities="entities.length"
+                  :analysis-progress="analysisProgress"
+                  :entity-status-map="entityStatusMap"
+                  @entities-selected="handleEntitiesSelected"
+                />
+                <template #fallback>
+                  <n-space justify="center" style="padding: 2rem">
+                    <n-spin size="large" />
+                  </n-space>
                 </template>
-                
-                <Suspense>
-                  <ConfigOutput 
-                    :config="generatedConfig"
-                    :entity-probabilities="analyzedEntities"
-                    :ha-connection="haConnection"
-                    :cached-historical-data="cachedHistoricalData"
-                    :entity-buffer="entityBuffer"
-                    :entity-status-map="entityStatusMap"
-                    :periods="periods"
-                    @config-updated="updateGeneratedConfig"
-                  />
-                  <template #fallback>
-                    <n-space justify="center" style="padding: 2rem">
-                      <n-spin size="large" />
-                    </n-space>
-                  </template>
-                </Suspense>
-              </n-card>
-            </n-tab-pane>
-          </n-tabs>
+              </Suspense>
+            </div>
+            
+            <!-- Configuration Panel -->
+            <div v-show="activeTab === 'config'" class="panel-content">
+              <Suspense>
+                <ConfigOutput 
+                  :config="generatedConfig"
+                  :entity-probabilities="analyzedEntities"
+                  :ha-connection="haConnection"
+                  :cached-historical-data="cachedHistoricalData"
+                  :entity-buffer="entityBuffer"
+                  :entity-status-map="entityStatusMap"
+                  :periods="periods"
+                  @config-updated="updateGeneratedConfig"
+                />
+                <template #fallback>
+                  <n-space justify="center" style="padding: 2rem">
+                    <n-spin size="large" />
+                  </n-space>
+                </template>
+              </Suspense>
+            </div>
+          </div>
         </main>
       </div>
     </n-message-provider>
@@ -364,78 +327,161 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
 
 <style scoped>
 .app {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: #ffffff;
 }
 
-header {
-  text-align: center;
-  margin-bottom: 3rem;
-  padding: 2rem 0;
-  border-bottom: 2px solid #e0e0e0;
+.minimal-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-header h1 {
-  color: #333;
-  margin-bottom: 0.5rem;
-}
-
-.step {
-  margin-bottom: 2rem;
-  transition: all 0.3s ease;
-}
-
-.step.completed :deep(.n-card) {
-  border-color: #18a058;
-  background: rgba(24, 160, 88, 0.05);
-}
-
-.step-header {
+.header-content {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  height: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  gap: 2rem;
 }
 
-.step-header h2 {
+.app-title {
+  font-size: 1.1rem;
+  font-weight: 600;
   margin: 0;
+  white-space: nowrap;
   color: #333;
+}
+
+.header-tabs {
+  flex: 1;
+}
+
+.header-tabs :deep(.n-tabs-nav) {
+  background: transparent;
+}
+
+.header-tabs :deep(.n-tabs-tab) {
+  padding: 0 16px;
+  height: 48px;
+}
+
+.tab-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.tab-icon {
+  color: #18a058;
+  font-weight: bold;
+}
+
+.tab-count {
+  background: #18a058;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  margin-left: 4px;
+}
+
+.main-content {
+  position: fixed;
+  top: 48px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+.content-wrapper {
+  height: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.panel-content {
+  height: 100%;
+  padding: 1rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: #ffffff;
+  box-sizing: border-box;
 }
 
 .analyze-section {
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   width: 100%;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 8px;
+  padding: 0.75rem;
+  background: #f0f4f8;
+  border-radius: 6px;
+  border: 1px solid #d1d9e0;
+  box-sizing: border-box;
 }
 
-/* Responsive design for tabs */
+.analyze-section .n-button {
+  width: auto;
+}
+
+.analyze-section .n-alert {
+  margin-top: 1rem;
+}
+
+/* Responsive adjustments */
+.periods-panel {
+  overflow-y: auto !important;
+  height: 100% !important;
+  padding: 0.5rem !important;
+}
+
 @media (max-width: 768px) {
-  .app {
+  .app-title {
+    font-size: 0.9rem;
+  }
+  
+  .header-content {
+    gap: 1rem;
+    padding: 0 0.5rem;
+  }
+  
+  .tab-label {
+    font-size: 0.85rem;
+  }
+  
+  .panel-content {
     padding: 0.5rem;
   }
   
-  header {
-    padding: 1rem 0;
-  }
-  
-  header h1 {
-    font-size: 1.8rem;
-  }
-  
-  .main-tabs :deep(.n-tab-pane) {
-    padding: 1rem;
-  }
-  
-  .tab-content h2 {
-    font-size: 1.3rem;
+  .periods-panel {
+    overflow-y: visible !important;
   }
 }
 
-/* Loading state for suspense fallback */
-.tab-content :deep(.n-spin) {
+/* High density screens */
+@media (min-width: 1600px) {
+  .content-wrapper {
+    max-width: 1600px;
+  }
+}
+
+/* Loading state */
+.panel-content :deep(.n-spin) {
   color: #18a058;
 }
-
 </style>

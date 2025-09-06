@@ -441,7 +441,7 @@ const updateChart = () => {
             timestamp >= period.start.getTime() && 
             timestamp <= period.end.getTime()
           )
-          return { x: timestamp, y: isInTruePeriod ? 90 : 10 }
+          return { x: timestamp, y: isInTruePeriod ? 100 : 0 }
         })
         
         baseSeries.push({

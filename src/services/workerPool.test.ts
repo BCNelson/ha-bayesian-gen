@@ -53,7 +53,7 @@ describe('WorkerPool', () => {
   describe('analyzeEntity', () => {
     it('should queue task and return promise', async () => {
       const entityHistory = { 'sensor.test': [] }
-      const periods = []
+      const periods: any[] = []
 
       // Start the analysis
       const analysisPromise = workerPool.analyzeEntity(entityHistory, periods)
@@ -74,7 +74,7 @@ describe('WorkerPool', () => {
         mockWorker.onmessage({
           target: mockWorker,
           data: mockResponse
-        } as MessageEvent)
+        } as unknown as MessageEvent)
       }
 
       const result = await analysisPromise
@@ -83,7 +83,7 @@ describe('WorkerPool', () => {
 
     it('should handle worker errors', async () => {
       const entityHistory = { 'sensor.test': [] }
-      const periods = []
+      const periods: any[] = []
 
       const analysisPromise = workerPool.analyzeEntity(entityHistory, periods)
 
@@ -98,7 +98,7 @@ describe('WorkerPool', () => {
         mockWorker.onmessage({
           target: mockWorker,
           data: mockErrorResponse
-        } as MessageEvent)
+        } as unknown as MessageEvent)
       }
 
       await expect(analysisPromise).rejects.toThrow('Test error message')
@@ -124,7 +124,7 @@ describe('WorkerPool', () => {
             id: 'task_0',
             data: []
           }
-        } as MessageEvent)
+        } as unknown as MessageEvent)
       }
 
       await promises[0]
@@ -154,7 +154,7 @@ describe('WorkerPool', () => {
             id: 'task_0',
             data: []
           }
-        } as MessageEvent)
+        } as unknown as MessageEvent)
       }
 
       await analysisPromise
@@ -178,7 +178,7 @@ describe('WorkerPool', () => {
         mockWorker.onerror({
           target: mockWorker,
           message: 'Worker crashed'
-        } as ErrorEvent)
+        } as unknown as ErrorEvent)
       }
 
       // Status should remain the same (worker replaced)
@@ -196,7 +196,7 @@ describe('WorkerPool', () => {
             id: 'unknown_task_id',
             data: []
           }
-        } as MessageEvent)
+        } as unknown as MessageEvent)
       }
 
       // Should not throw error
@@ -257,7 +257,7 @@ describe('WorkerPool', () => {
             id: 'task_0',
             data: []
           }
-        } as MessageEvent)
+        } as unknown as MessageEvent)
       }
 
       await task1
@@ -275,7 +275,7 @@ describe('WorkerPool', () => {
             id: 'task_1',
             data: []
           }
-        } as MessageEvent)
+        } as unknown as MessageEvent)
       }
 
       await task2

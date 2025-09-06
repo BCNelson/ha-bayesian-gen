@@ -166,23 +166,24 @@ const toggleNumericSelection = () => {
   align-items: center;
   justify-content: space-between;
   padding: 1rem;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
+  background: #ffffff;
+  border-bottom: 1px solid #dee2e6;
   gap: 1rem;
   flex-wrap: wrap;
 }
 
 .entity-name {
   font-weight: 500;
-  color: #333;
+  color: #212529;
   font-family: monospace;
-  background: white;
+  background: #f8f9fa;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 0.9rem;
   flex: 1;
   min-width: 200px;
   word-break: break-all;
+  border: 1px solid #dee2e6;
 }
 
 .entity-domain {
@@ -203,7 +204,8 @@ const toggleNumericSelection = () => {
 }
 
 .best-discrimination span {
-  color: #666;
+  color: #495057;
+  font-weight: 500;
 }
 
 .best-discrimination strong.excellent {
@@ -225,7 +227,8 @@ const toggleNumericSelection = () => {
 .low-discrimination-compact {
   padding: 1rem;
   text-align: center;
-  background: #f5f5f5;
+  background: #f8f9fa;
+  border-top: 1px solid #dee2e6;
 }
 
 .expand-compact-btn {

@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import { analyzeNumericStates, findOptimalNumericThresholds, calculateThresholdScore } from './utils/sensorTimeAnalysis'
 import type { NumericStateStats } from './types/bayesian'
 
 describe('Integration Tests - Edge Cases and Optimization Verification', () => {
@@ -28,8 +27,6 @@ describe('Integration Tests - Edge Cases and Optimization Verification', () => {
       isNumeric: true,
       min: 0,
       max: 100,
-      mean: 50,
-      stdDev: 25,
       // True values clustered around 25 and 75
       trueChunks: [
         ...Array.from({ length: 10 }, (_, i) => ({ value: 20 + i, duration: 1000 })),

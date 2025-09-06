@@ -103,27 +103,11 @@
       </div>
     </div>
     
-    <n-alert v-else-if="error" type="error">
+    <n-alert v-else-if="error" type="error" class="error-alert">
       {{ error }}
     </n-alert>
     
-    <div v-else-if="analyzedEntities.length > 0">
-      
-      <n-space style="margin-bottom: 1.5rem">
-        <n-input
-          v-model:value="searchFilter"
-          placeholder="Filter entities..."
-          clearable
-          style="flex: 1"
-        />
-        <n-select
-          v-model:value="minDiscrimination"
-          :options="discriminationOptions"
-          style="width: 200px"
-        />
-      </n-space>
-      
-      <div class="entity-cards">
+    <div v-else-if="!isAnalyzing && analyzedEntities.length > 0" class="entity-cards">
         <EntityCard
           v-for="group in filteredEntities"
           :key="group.entityId"
@@ -131,45 +115,33 @@
           :selected-entities="selectedEntities"
           @toggle-selection="toggleEntitySelection"
         />
-      </div>
-      
-      <n-card style="margin-top: 2rem">
-        <template #header>
-          <n-text strong>Select Entities for Bayesian Configuration</n-text>
-        </template>
-        <n-text depth="3" style="display: block; margin-bottom: 1.5rem">
-          Click on entities above or use the buttons below to select which entities to include in your final Bayesian sensor configuration.
-        </n-text>
-        
-        <n-space style="margin-bottom: 1.5rem">
-          <n-button @click="selectTop(5)">Select Top 5</n-button>
-          <n-button @click="selectTop(10)" type="info">Select Top 10 (Recommended)</n-button>
-          <n-button @click="selectTop(20)">Select Top 20</n-button>
-          <n-button @click="selectAll">Select All Visible</n-button>
-          <n-button @click="selectNone">Clear Selection</n-button>
-        </n-space>
-        
-        <n-alert 
-          v-if="selectedEntities.length > 0" 
-          type="success"
-          style="text-align: center"
-        >
-          <n-text strong>{{ selectedEntities.length }}</n-text>
-          <n-text> entities selected for configuration</n-text>
-          <br />
-          <n-button 
-            @click="generateConfig" 
-            type="primary"
-            size="large"
-            style="margin-top: 1rem"
-          >
-            Generate Bayesian Configuration
-          </n-button>
-        </n-alert>
-      </n-card>
     </div>
     
-    <n-empty v-else description="No analysis results yet">
+    <!-- Compact Action Bar -->
+    <div v-if="analyzedEntities.length > 0 && !isAnalyzing" class="action-bar">
+      <div class="selection-buttons">
+        <n-button @click="selectTop(5)" size="small">Top 5</n-button>
+        <n-button @click="selectTop(10)" size="small" type="info">Top 10</n-button>
+        <n-button @click="selectTop(20)" size="small">Top 20</n-button>
+        <n-button @click="selectAll" size="small">All</n-button>
+        <n-button @click="selectNone" size="small">Clear</n-button>
+      </div>
+      <div class="generate-section">
+        <n-text v-if="selectedEntities.length > 0" style="margin-right: 1rem">
+          <strong>{{ selectedEntities.length }}</strong> selected
+        </n-text>
+        <n-button 
+          @click="generateConfig" 
+          type="primary"
+          size="small"
+          :disabled="selectedEntities.length === 0"
+        >
+          Generate Config
+        </n-button>
+      </div>
+    </div>
+    
+    <n-empty v-else description="No analysis results yet" class="empty-state">
       <template #extra>
         <n-ol>
           <n-li>Connect to Home Assistant</n-li>
@@ -445,15 +417,137 @@ const generateConfig = () => {
 </script>
 
 <style scoped>
+.analyzer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0.75rem;
+  overflow: hidden;
+}
+
+.status-bar {
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 0.75rem;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.status-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.status-text {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.current-entity {
+  color: #495057;
+  margin-left: 0.5rem;
+  font-weight: 500;
+}
+
+.queue-container {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #dee2e6;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.entity-cards-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.5rem;
+  min-height: 0;
+}
+
 .entity-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.75rem;
+}
+
+.update-message {
+  display: block;
+  text-align: center;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.error-alert {
+  margin-top: 0.5rem;
+}
+
+.action-bar {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.selection-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.generate-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
 }
 
 @media (max-width: 768px) {
   .entity-cards {
     grid-template-columns: 1fr;
+  }
+  
+  .status-content {
+    flex-wrap: wrap;
+  }
+  
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filter-bar .n-input,
+  .filter-bar .n-select {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  .entity-cards {
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   }
 }
 </style>

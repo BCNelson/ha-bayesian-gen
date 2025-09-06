@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   createSensorPeriodChunks,
   analyzeNumericStates,
-  chunkMatchesThreshold,
   calculateThresholdScore,
   findOptimalNumericThresholds
 } from './sensorTimeAnalysis'
@@ -17,8 +16,6 @@ describe('sensorTimeAnalysis - Edge Cases and Optimization Accuracy', () => {
         isNumeric: true,
         min: 15,
         max: 95,
-        mean: 55,
-        stdDev: 30,
         trueChunks: [
           { value: 80, duration: 1000 },
           { value: 85, duration: 1500 },
@@ -412,11 +409,11 @@ describe('sensorTimeAnalysis - Edge Cases and Optimization Accuracy', () => {
         isNumeric: true,
         min: 0,
         max: 100,
-        trueChunks: Array.from({ length: 50 }, (_, i) => ({
+        trueChunks: Array.from({ length: 50 }, () => ({
           value: 20 + Math.random() * 10, // True values around 20-30
           duration: 1000
         })),
-        falseChunks: Array.from({ length: 50 }, (_, i) => ({
+        falseChunks: Array.from({ length: 50 }, () => ({
           value: 70 + Math.random() * 10, // False values around 70-80
           duration: 1000
         }))

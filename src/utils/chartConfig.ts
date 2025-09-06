@@ -51,6 +51,7 @@ export const createBayesianChartOptions = (config: ChartConfig) => {
   },
   yaxis: config.showSensorValues ? [
     {
+      seriesName: ['Probability', 'Sensor State (ON/OFF)', 'Desired State'],
       title: {
         text: 'Probability (%)'
       },
@@ -61,6 +62,7 @@ export const createBayesianChartOptions = (config: ChartConfig) => {
       }
     },
     {
+      seriesName: ['Value'],
       opposite: true,
       title: {
         text: 'Sensor Value'

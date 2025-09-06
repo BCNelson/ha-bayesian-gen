@@ -23,13 +23,13 @@ class MockWorker {
           this.onerror({
             target: this,
             message: 'Simulated worker error'
-          } as ErrorEvent)
+          } as unknown as ErrorEvent)
         }
       } else if (this.onmessage) {
         this.onmessage({
           target: this,
           data
-        } as MessageEvent)
+        } as unknown as MessageEvent)
       }
     }, delay)
   }
@@ -83,7 +83,7 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
           worker.onerror({
             target: worker,
             message: 'All workers failed'
-          } as ErrorEvent)
+          } as unknown as ErrorEvent)
         }
       })
 
@@ -114,7 +114,7 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
             worker.onerror({
               target: worker,
               message: `Worker ${failureCount} failed`
-            } as ErrorEvent)
+            } as unknown as ErrorEvent)
           }
           failureCount++
           setTimeout(cascadeFailure, 50) // Fail next worker after 50ms
@@ -134,8 +134,8 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
     it('should handle worker failure during task completion', async () => {
       workerPool = new WorkerPool(2)
       
-      const task1 = workerPool.analyzeEntity({ 'sensor.test1': [] }, [])
-      const task2 = workerPool.analyzeEntity({ 'sensor.test2': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.test1': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.test2': [] }, [])
       
       // Worker 1 completes successfully
       mockWorkerInstances[0].simulateMessage({
@@ -150,7 +150,7 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
           mockWorkerInstances[1].onerror({
             target: mockWorkerInstances[1],
             message: 'Failed during processing'
-          } as ErrorEvent)
+          } as unknown as ErrorEvent)
         }
       }, 10)
       
@@ -167,7 +167,6 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
       workerPool = new WorkerPool(2)
       
       const tasks = []
-      const results = []
       
       // Submit many tasks in rapid succession
       for (let i = 0; i < 20; i++) {
@@ -233,8 +232,8 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
     it('should handle worker recovery during active tasks', async () => {
       workerPool = new WorkerPool(2)
       
-      const task1 = workerPool.analyzeEntity({ 'sensor.test1': [] }, [])
-      const task2 = workerPool.analyzeEntity({ 'sensor.test2': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.test1': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.test2': [] }, [])
       
       // Kill worker 1 while it might be processing task 1
       setTimeout(() => {
@@ -242,7 +241,7 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
           mockWorkerInstances[0].onerror({
             target: mockWorkerInstances[0],
             message: 'Worker died during processing'
-          } as ErrorEvent)
+          } as unknown as ErrorEvent)
         }
       }, 10)
       
@@ -300,8 +299,8 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
     it('should handle task cancellation and cleanup', async () => {
       workerPool = new WorkerPool(2)
       
-      const task1 = workerPool.analyzeEntity({ 'sensor.cancel1': [] }, [])
-      const task2 = workerPool.analyzeEntity({ 'sensor.cancel2': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.cancel1': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.cancel2': [] }, [])
       
       // Wait a bit for tasks to be queued
       await new Promise(resolve => setTimeout(resolve, 10))
@@ -338,8 +337,8 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
     it('should properly propagate different error types', async () => {
       workerPool = new WorkerPool(2)
       
-      const task1 = workerPool.analyzeEntity({ 'sensor.error1': [] }, [])
-      const task2 = workerPool.analyzeEntity({ 'sensor.error2': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.error1': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.error2': [] }, [])
       
       // Different error types
       setTimeout(() => {
@@ -432,7 +431,7 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
               worker.onerror({
                 target: worker,
                 message: `Thrash failure ${i}`
-              } as ErrorEvent)
+              } as unknown as ErrorEvent)
             }
           })
         }, i * 10) // Every 10ms
@@ -452,8 +451,8 @@ describe('WorkerPool - Edge Cases and Concurrency', () => {
       workerPool = new WorkerPool(2)
       
       // This shouldn't happen in normal operation but test robustness
-      const task1 = workerPool.analyzeEntity({ 'sensor.dup1': [] }, [])
-      const task2 = workerPool.analyzeEntity({ 'sensor.dup2': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.dup1': [] }, [])
+      workerPool.analyzeEntity({ 'sensor.dup2': [] }, [])
       
       // Simulate worker returning result for wrong task ID
       setTimeout(() => {

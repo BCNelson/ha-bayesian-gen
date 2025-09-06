@@ -61,9 +61,6 @@
             </div>
           </div>
           
-          <div class="prob-summary">
-            Based on threshold conditions across {{ group.states[0].totalTruePeriods }} TRUE and {{ group.states[0].totalFalsePeriods }} FALSE periods
-          </div>
         </div>
       </div>
     </div>
@@ -103,7 +100,8 @@ const getDiscriminationClass = (discrimination: number) => {
 <style scoped>
 
 .numeric-entity {
-  background: #f8f9fa;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
   border-radius: 6px;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -172,14 +170,15 @@ const getDiscriminationClass = (discrimination: number) => {
 }
 
 .optimal-thresholds {
-  background: #f5f5f5;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
   padding: 0.75rem;
   border-radius: 4px;
 }
 
 .thresholds-header {
-  font-weight: 500;
-  color: #333;
+  font-weight: 600;
+  color: #212529;
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
 }
@@ -208,8 +207,9 @@ const getDiscriminationClass = (discrimination: number) => {
 }
 
 .threshold-item.none {
-  background: #f5f5f5;
-  color: #666;
+  background: #f8f9fa;
+  color: #495057;
+  border: 1px solid #dee2e6;
 }
 
 .numeric-probabilities {
@@ -234,13 +234,14 @@ const getDiscriminationClass = (discrimination: number) => {
   min-width: 80px;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #333;
+  color: #212529;
 }
 
 .prob-bar-numeric {
   flex: 1;
   height: 20px;
-  background: #f0f0f0;
+  background: #e9ecef;
+  border: 1px solid #dee2e6;
   border-radius: 10px;
   overflow: hidden;
 }
@@ -268,8 +269,9 @@ const getDiscriminationClass = (discrimination: number) => {
 
 .prob-summary {
   font-size: 0.8rem;
-  color: #666;
-  background: rgba(255, 255, 255, 0.7);
+  color: #495057;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
   padding: 0.5rem;
   border-radius: 3px;
   text-align: center;

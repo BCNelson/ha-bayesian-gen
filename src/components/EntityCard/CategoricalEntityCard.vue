@@ -140,7 +140,7 @@ const getDiscriminationClass = (discrimination: number) => {
 
 .states-header span {
   font-weight: 500;
-  color: #333;
+  color: #212529;
 }
 
 .show-more-btn,
@@ -159,7 +159,7 @@ const getDiscriminationClass = (discrimination: number) => {
 .state-card {
   display: flex;
   background: white;
-  border: 2px solid #e0e0e0;
+  border: 2px solid #dee2e6;
   border-radius: 6px;
   padding: 0.75rem;
   cursor: pointer;
@@ -199,9 +199,10 @@ const getDiscriminationClass = (discrimination: number) => {
 
 .state-value {
   font-weight: 500;
-  color: #333;
+  color: #212529;
   font-family: monospace;
-  background: #f5f5f5;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
   padding: 0.2rem 0.4rem;
   border-radius: 3px;
   font-size: 0.85rem;
@@ -214,7 +215,8 @@ const getDiscriminationClass = (discrimination: number) => {
   font-size: 0.8rem;
   padding: 0.2rem 0.4rem;
   border-radius: 3px;
-  background: #f0f0f0;
+  background: #e9ecef;
+  border: 1px solid #dee2e6;
 }
 
 .high-discrimination {
@@ -248,13 +250,14 @@ const getDiscriminationClass = (discrimination: number) => {
 .prob-label {
   min-width: 40px;
   font-weight: 500;
-  color: #333;
+  color: #212529;
 }
 
 .prob-bar-mini {
   flex: 1;
   height: 12px;
-  background: #f0f0f0;
+  background: #e9ecef;
+  border: 1px solid #dee2e6;
   border-radius: 6px;
   overflow: hidden;
 }
@@ -282,8 +285,9 @@ const getDiscriminationClass = (discrimination: number) => {
 .occurrence-text {
   min-width: 50px;
   text-align: right;
-  color: #666;
+  color: #6c757d;
   font-size: 0.75rem;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {

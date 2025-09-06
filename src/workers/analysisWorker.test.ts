@@ -5,7 +5,6 @@ import type { TimePeriod, EntityProbability } from '../types/bayesian'
 // Import the BayesianCalculatorWorker class directly for testing
 // Since the worker uses self.onmessage, we'll test the class methods directly
 class BayesianCalculatorWorker {
-  private numericThresholdCache = new Map<string, Map<string, number>>()
   
   calculateEntityProbabilities(
     history: HAHistoryResponse,

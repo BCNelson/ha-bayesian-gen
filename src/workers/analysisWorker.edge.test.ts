@@ -4,7 +4,6 @@ import type { TimePeriod, EntityProbability } from '../types/bayesian'
 
 // Extended BayesianCalculatorWorker class for edge case testing
 class BayesianCalculatorWorker {
-  private numericThresholdCache = new Map<string, Map<string, number>>()
   
   calculateEntityProbabilities(
     history: HAHistoryResponse,

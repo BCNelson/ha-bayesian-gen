@@ -1,54 +1,52 @@
 <template>
-  <n-space vertical size="large">
-    <n-text tag="p">Add examples of when the Bayesian sensor should be TRUE or FALSE. You can mark periods across multiple days/weeks.</n-text>
-    
-    <n-alert type="warning" title="Historical Data Only">
-      Select past dates and times only. We need historical data to analyze entity states and calculate probabilities.
-    </n-alert>
-    
-    <n-card :bordered="false">
-      <n-space justify="space-between" align="center">
-        <n-radio-group v-model:value="mode" button-style="solid">
-          <n-radio-button value="single">Single Period</n-radio-button>
-          <n-radio-button value="bulk">Bulk Selection</n-radio-button>
-          <n-radio-button value="timeline">Visual Timeline</n-radio-button>
-        </n-radio-group>
-        
-        <n-radio-group v-model:value="currentState">
-          <n-radio :value="true">
-            <n-text :style="{ color: '#18a058', fontWeight: 'bold' }">
-              Marking TRUE periods
-            </n-text>
-          </n-radio>
-          <n-radio :value="false">
-            <n-text :style="{ color: '#d03050', fontWeight: 'bold' }">
-              Marking FALSE periods
-            </n-text>
-          </n-radio>
-        </n-radio-group>
-      </n-space>
-    </n-card>
+  <div class="period-selector-container">
+    <div class="controls-bar">
+      <n-radio-group v-model:value="mode" button-style="solid" size="small">
+        <n-radio-button value="single">Single</n-radio-button>
+        <n-radio-button value="bulk">Bulk</n-radio-button>
+        <n-radio-button value="timeline">Timeline</n-radio-button>
+      </n-radio-group>
+      
+      <n-radio-group v-model:value="currentState" size="small">
+        <n-radio :value="true">
+          <n-text :style="{ color: '#18a058', fontWeight: 'bold' }">
+            TRUE periods
+          </n-text>
+        </n-radio>
+        <n-radio :value="false">
+          <n-text :style="{ color: '#d03050', fontWeight: 'bold' }">
+            FALSE periods
+          </n-text>
+        </n-radio>
+      </n-radio-group>
+      
+      <n-text depth="3" class="info-text">
+        Select past dates only (historical data required)
+      </n-text>
+    </div>
 
-    <SinglePeriodMode 
-      v-if="mode === 'single'"
-      :current-state="currentState"
-      @period-added="addPeriod"
-    />
+    <div class="mode-content">
+      <SinglePeriodMode 
+        v-if="mode === 'single'"
+        :current-state="currentState"
+        @period-added="addPeriod"
+      />
 
-    <BulkPeriodMode 
-      v-if="mode === 'bulk'"
-      :current-state="currentState"
-      @periods-added="addPeriods"
-    />
+      <BulkPeriodMode 
+        v-if="mode === 'bulk'"
+        :current-state="currentState"
+        @periods-added="addPeriods"
+      />
 
-    <TimelineMode 
-      v-if="mode === 'timeline'"
-      ref="timelineRef"
-      :current-state="currentState"
-      :periods="periods"
-      @period-added="addPeriod"
-      @bulk-mark-remaining="markAllRemainingAs"
-    />
+      <TimelineMode 
+        v-if="mode === 'timeline'"
+        ref="timelineRef"
+        :current-state="currentState"
+        :periods="periods"
+        @period-added="addPeriod"
+        @bulk-mark-remaining="markAllRemainingAs"
+      />
+    </div>
     
     <ConfigurationManager 
       ref="configManagerRef"
@@ -64,7 +62,7 @@
       @mark-all-remaining-as="markAllRemainingAs"
       @clear-all-periods="clearAllPeriods"
     />
-  </n-space>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -199,6 +197,47 @@ const autoSave = () => {
 @media (max-width: 768px) {
   :deep(.n-space) {
     flex-direction: column;
+  }
+}
+.period-selector-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: min-content;
+  padding-bottom: 2rem;
+}
+
+.controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  flex-wrap: wrap;
+}
+
+.info-text {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.mode-content {
+  padding: 0.5rem;
+  overflow: visible;
+}
+
+@media (max-width: 768px) {
+  .controls-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  
+  .info-text {
+    margin-left: 0;
+    text-align: center;
   }
 }
 </style>
