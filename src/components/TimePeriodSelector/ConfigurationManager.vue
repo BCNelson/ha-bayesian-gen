@@ -111,6 +111,7 @@
 import { ref, onMounted } from 'vue'
 import { format } from 'date-fns'
 import type { TimePeriod } from '../../types/bayesian'
+import { readString, writeString } from '../../utils/sessionStore'
 
 interface SavedConfig {
   name: string
@@ -134,7 +135,7 @@ const newConfigName = ref('')
 const isCreatingNew = ref(false)
 
 const loadSavedConfigs = () => {
-  const saved = localStorage.getItem('ha_bayesian_configs')
+  const saved = readString('ha_bayesian_configs')
   if (saved) {
     try {
       const configs = JSON.parse(saved)
@@ -184,8 +185,8 @@ const autoSave = () => {
     })),
     lastModified: c.lastModified
   }))
-  localStorage.setItem('ha_bayesian_configs', JSON.stringify(toSave))
-  localStorage.setItem('ha_bayesian_last_config', currentConfigName.value)
+  writeString('ha_bayesian_configs', JSON.stringify(toSave))
+  writeString('ha_bayesian_last_config', currentConfigName.value)
 }
 
 const createNewConfig = () => {
@@ -212,7 +213,7 @@ const switchConfig = (configName: string) => {
   if (config) {
     currentConfigName.value = configName
     showConfigDialog.value = false
-    localStorage.setItem('ha_bayesian_last_config', configName)
+    writeString('ha_bayesian_last_config', configName)
     emit('configSwitched', [...config.periods], configName)
   }
 }
@@ -231,7 +232,7 @@ const deleteConfig = (configName: string) => {
     })),
     lastModified: c.lastModified
   }))
-  localStorage.setItem('ha_bayesian_configs', JSON.stringify(toSave))
+  writeString('ha_bayesian_configs', JSON.stringify(toSave))
   
   if (currentConfigName.value === configName) {
     if (savedConfigs.value.length > 0) {
@@ -244,7 +245,7 @@ const deleteConfig = (configName: string) => {
 }
 
 const loadLastConfig = () => {
-  const lastConfigName = localStorage.getItem('ha_bayesian_last_config')
+  const lastConfigName = readString('ha_bayesian_last_config')
   
   if (lastConfigName && savedConfigs.value.some(c => c.name === lastConfigName)) {
     switchConfig(lastConfigName)
@@ -277,7 +278,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--app-surface-muted);
   border-radius: 8px;
   margin-bottom: 1.5rem;
 }
@@ -289,7 +290,7 @@ onMounted(() => {
 }
 
 .current-config {
-  color: #333;
+  color: var(--app-text);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -297,11 +298,11 @@ onMounted(() => {
 
 .auto-save-indicator {
   font-size: 0.8rem;
-  color: #4CAF50;
+  color: var(--app-true);
 }
 
 .no-config {
-  color: #999;
+  color: var(--app-text-3);
   font-style: italic;
 }
 
@@ -311,7 +312,7 @@ onMounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--app-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -319,7 +320,7 @@ onMounted(() => {
 }
 
 .dialog {
-  background: white;
+  background: var(--app-surface);
   border-radius: 8px;
   padding: 1.5rem;
   max-width: 600px;
@@ -330,7 +331,7 @@ onMounted(() => {
 
 .dialog h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--app-text);
 }
 
 .dialog-content {
@@ -340,12 +341,12 @@ onMounted(() => {
 .create-new-section {
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .config-list h4 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--app-text);
   font-size: 1rem;
 }
 
@@ -354,14 +355,14 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--app-border);
   border-radius: 4px;
   margin-bottom: 0.5rem;
 }
 
 .config-item.active {
-  border-color: #4CAF50;
-  background: #e8f5e9;
+  border-color: var(--app-true);
+  background: var(--app-true-soft);
 }
 
 .config-info {
@@ -372,12 +373,12 @@ onMounted(() => {
 
 .config-name {
   font-weight: 500;
-  color: #333;
+  color: var(--app-text);
 }
 
 .config-details {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--app-text-2);
 }
 
 .config-actions {
@@ -387,8 +388,8 @@ onMounted(() => {
 }
 
 .current-badge {
-  background: #4CAF50;
-  color: white;
+  background: var(--app-true);
+  color: var(--app-on-accent);
   padding: 0.25rem 0.5rem;
   border-radius: 3px;
   font-size: 0.75rem;
@@ -402,15 +403,15 @@ onMounted(() => {
 
 .empty-state {
   text-align: center;
-  color: #999;
+  color: var(--app-text-3);
   padding: 2rem;
-  background: #f8f9fa;
+  background: var(--app-surface-muted);
   border-radius: 4px;
 }
 
 .dialog-info {
   margin: 0.5rem 0 0 0;
-  color: #666;
+  color: var(--app-text-2);
   font-size: 0.9rem;
 }
 

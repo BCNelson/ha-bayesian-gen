@@ -192,6 +192,7 @@ export const useBayesianAnalysis = () => {
     canAnalyze,
     calculator,
     haConnection,
+    haApi,
     cachedHistoricalData,
     entityBuffer, // NEW: Efficient buffer access
     connectToHA,
