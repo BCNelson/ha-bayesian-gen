@@ -1,68 +1,116 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+@import './styles/components.css';
 
+/*
+ * Design tokens. Values follow Naive UI's light/dark palettes so custom CSS
+ * matches the component library. The active theme is selected by App.vue,
+ * which sets `data-theme` on <html> (OS preference or manual override).
+ */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --app-bg: #f5f6f8;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f7f8fa;
+  --app-surface-hover: #eef1f4;
+  --app-border: #e0e0e6;
+  --app-border-strong: #c2c2c8;
+  --app-text: #1f2225;
+  --app-text-2: #4b5157;
+  --app-text-3: #767c82;
+  --app-on-accent: #ffffff;
+
+  --app-primary: #18a058;
+  --app-primary-soft: rgba(24, 160, 88, 0.12);
+  --app-true: #18a058;
+  --app-true-soft: rgba(24, 160, 88, 0.12);
+  --app-true-strong: #0c7a43;
+  --app-false: #d03050;
+  --app-false-soft: rgba(208, 48, 80, 0.1);
+  --app-false-strong: #ab1f3f;
+  --app-info: #2080f0;
+  --app-info-soft: rgba(32, 128, 240, 0.1);
+  --app-info-strong: #1060c9;
+  --app-warning: #f0a020;
+  --app-warning-soft: rgba(240, 160, 32, 0.12);
+  --app-warning-strong: #c97c10;
+  --app-accent: #8a2be2;
+  --app-accent-soft: rgba(138, 43, 226, 0.1);
+  --app-ha-blue: #03a9f4;
+
+  --app-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --app-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --app-overlay: rgba(0, 0, 0, 0.5);
+
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   color-scheme: light;
-  color: #212529;
-  background-color: #ffffff;
-
+  color: var(--app-text);
+  background-color: var(--app-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+:root[data-theme='dark'] {
+  --app-bg: #101014;
+  --app-surface: #18181c;
+  --app-surface-muted: #1f1f24;
+  --app-surface-hover: #26262c;
+  --app-border: rgba(255, 255, 255, 0.12);
+  --app-border-strong: rgba(255, 255, 255, 0.24);
+  --app-text: rgba(255, 255, 255, 0.9);
+  --app-text-2: rgba(255, 255, 255, 0.72);
+  --app-text-3: rgba(255, 255, 255, 0.52);
+  --app-on-accent: #101014;
+
+  --app-primary: #63e2b7;
+  --app-primary-soft: rgba(99, 226, 183, 0.14);
+  --app-true: #63e2b7;
+  --app-true-soft: rgba(99, 226, 183, 0.14);
+  --app-true-strong: #7fe7c4;
+  --app-false: #e88080;
+  --app-false-soft: rgba(232, 128, 128, 0.14);
+  --app-false-strong: #f0a0a0;
+  --app-info: #70c0e8;
+  --app-info-soft: rgba(112, 192, 232, 0.14);
+  --app-info-strong: #8acbec;
+  --app-warning: #f2c97d;
+  --app-warning-soft: rgba(242, 201, 125, 0.14);
+  --app-warning-strong: #f5d599;
+  --app-accent: #c39af0;
+  --app-accent-soft: rgba(195, 154, 240, 0.14);
+  --app-ha-blue: #039be5;
+
+  --app-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --app-shadow-md: 0 2px 10px rgba(0, 0, 0, 0.5);
+  --app-overlay: rgba(0, 0, 0, 0.65);
+  color-scheme: dark;
 }
 
-html, body {
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+a {
+  font-weight: 500;
+  color: var(--app-info);
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: var(--app-info-strong);
+}
+
+html,
+body {
   width: 100%;
   height: 100%;
   min-width: 320px;
-  background-color: #ffffff;
+  background-color: var(--app-bg);
+  color: var(--app-text);
   overflow: hidden;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #ffffff;
-  color: #212529;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-.card {
-  padding: 2em;
 }
 
 #app {
@@ -73,61 +121,80 @@ button:focus-visible {
   overflow: hidden;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* Plain (non-Naive) form controls used in some legacy components */
+input,
+select,
+textarea {
+  color: var(--app-text);
+  background-color: var(--app-surface);
+  border-color: var(--app-border);
+  font-family: inherit;
 }
 
-/* Shared component styles */
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+/* Semantic text helpers */
+.txt-true {
+  color: var(--app-true) !important;
+}
+
+.txt-false {
+  color: var(--app-false) !important;
+}
+
+/* Shared layout for the period generators */
+.generator {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-width: 900px;
+}
+
+.generator-intro {
+  color: var(--app-text-2);
   font-size: 0.9rem;
-  transition: all 0.3s ease;
-  display: inline-flex;
-  align-items: center;
+}
+
+.generator-section {
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
 }
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.generator .section-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.btn-primary {
-  background: #4CAF50;
-  color: white;
+.generator .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem 1rem;
+  align-items: end;
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: #45a049;
+.generator .form-grid .span-2 {
+  grid-column: span 2;
 }
 
-.btn-secondary {
-  background: #2196F3;
-  color: white;
+.generator .fetch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.btn-secondary:hover:not(:disabled) {
-  background: #1976D2;
-}
+@media (max-width: 600px) {
+  .generator .form-grid {
+    grid-template-columns: 1fr;
+  }
 
-.btn-outline {
-  background: white;
-  color: #333;
-  border: 1px solid #ddd;
+  .generator .form-grid .span-2 {
+    grid-column: auto;
+  }
 }
-
-.btn-outline:hover:not(:disabled) {
-  background: #f0f0f0;
-}
+button { font-family: inherit; }

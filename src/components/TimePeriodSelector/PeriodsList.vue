@@ -121,7 +121,7 @@ const clearAllPeriods = () => {
 
 .periods-header h3 {
   margin: 0;
-  color: #333;
+  color: var(--app-text);
 }
 
 .bulk-actions {
@@ -136,23 +136,23 @@ const clearAllPeriods = () => {
 }
 
 .true-btn:not(:disabled) {
-  border-color: #4CAF50;
-  color: #4CAF50;
+  border-color: var(--app-true);
+  color: var(--app-true);
 }
 
 .true-btn:not(:disabled):hover {
-  background: #4CAF50;
-  color: white;
+  background: var(--app-true);
+  color: var(--app-on-accent);
 }
 
 .false-btn:not(:disabled) {
-  border-color: #f44336;
-  color: #f44336;
+  border-color: var(--app-false);
+  color: var(--app-false);
 }
 
 .false-btn:not(:disabled):hover {
-  background: #f44336;
-  color: white;
+  background: var(--app-false);
+  color: var(--app-on-accent);
 }
 
 .period-summary {
@@ -160,7 +160,7 @@ const clearAllPeriods = () => {
   gap: 1rem;
   margin-bottom: 1rem;
   padding: 0.75rem;
-  background: #f8f9fa;
+  background: var(--app-surface-muted);
   border-radius: 4px;
 }
 
@@ -171,13 +171,13 @@ const clearAllPeriods = () => {
 }
 
 .true-summary {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: var(--app-true-soft);
+  color: var(--app-true-strong);
 }
 
 .false-summary {
-  background: #ffebee;
-  color: #c62828;
+  background: var(--app-false-soft);
+  color: var(--app-false-strong);
 }
 
 .period-cards {
@@ -187,21 +187,21 @@ const clearAllPeriods = () => {
 }
 
 .period-card {
-  background: white;
-  border: 2px solid #e0e0e0;
+  background: var(--app-surface);
+  border: 2px solid var(--app-border);
   border-radius: 8px;
   padding: 1rem;
   transition: all 0.3s;
 }
 
 .period-card.true-period {
-  border-color: #4CAF50;
-  background: #e8f5e9;
+  border-color: var(--app-true);
+  background: var(--app-true-soft);
 }
 
 .period-card.false-period {
-  border-color: #f44336;
-  background: #ffebee;
+  border-color: var(--app-false);
+  background: var(--app-false-soft);
 }
 
 .period-header {
@@ -216,15 +216,15 @@ const clearAllPeriods = () => {
   font-size: 0.9rem;
   padding: 0.25rem 0.5rem;
   border-radius: 3px;
-  color: white;
+  color: var(--app-on-accent);
 }
 
 .true-period .period-state {
-  background: #4CAF50;
+  background: var(--app-true);
 }
 
 .false-period .period-state {
-  background: #f44336;
+  background: var(--app-false);
 }
 
 .remove-btn {
@@ -232,35 +232,35 @@ const clearAllPeriods = () => {
   border: none;
   font-size: 1.2rem;
   cursor: pointer;
-  color: #999;
+  color: var(--app-text-3);
   padding: 0.25rem;
   border-radius: 3px;
   transition: all 0.2s;
 }
 
 .remove-btn:hover {
-  background: #f44336;
-  color: white;
+  background: var(--app-false);
+  color: var(--app-on-accent);
 }
 
 .period-time {
   font-family: monospace;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--app-text);
   margin-bottom: 0.5rem;
 }
 
 .period-duration {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--app-text-2);
   margin-bottom: 0.5rem;
 }
 
 .period-label {
   font-size: 0.85rem;
-  color: #555;
+  color: var(--app-text-2);
   font-style: italic;
-  background: rgba(255, 255, 255, 0.7);
+  background: color-mix(in srgb, var(--app-surface) 70%, transparent);
   padding: 0.25rem 0.5rem;
   border-radius: 3px;
 }

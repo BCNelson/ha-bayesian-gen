@@ -93,7 +93,7 @@ const addSinglePeriod = () => {
 <style scoped>
 
 .single-mode {
-  background: #f5f5f5;
+  background: var(--app-surface-muted);
   padding: 1.5rem;
   border-radius: 8px;
   margin-bottom: 2rem;
@@ -116,12 +116,12 @@ const addSinglePeriod = () => {
 .form-group label {
   font-weight: 500;
   margin-bottom: 0.25rem;
-  color: #555;
+  color: var(--app-text-2);
 }
 
 .form-group input {
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--app-border);
   border-radius: 4px;
   font-size: 0.95rem;
 }

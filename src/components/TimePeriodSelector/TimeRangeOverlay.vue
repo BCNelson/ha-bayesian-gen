@@ -345,13 +345,13 @@ const endDrag = () => {
 
 .range-true {
   background: rgba(76, 175, 80, 0.8);
-  color: #1b5e20;
+  color: #fff;
   border-color: rgba(46, 125, 50, 0.3);
 }
 
 .range-false {
   background: rgba(244, 67, 54, 0.8);
-  color: #b71c1c;
+  color: #fff;
   border-color: rgba(198, 40, 40, 0.3);
 }
 
@@ -378,12 +378,12 @@ const endDrag = () => {
 }
 
 .range-true.clickable:hover {
-  border-color: #2e7d32;
+  border-color: var(--app-true-strong);
   background: rgba(76, 175, 80, 0.9);
 }
 
 .range-false.clickable:hover {
-  border-color: #c62828;
+  border-color: var(--app-false-strong);
   background: rgba(244, 67, 54, 0.9);
 }
 
@@ -392,7 +392,7 @@ const endDrag = () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   pointer-events: none;
   padding: 2px 4px;
   height: 100%;
@@ -416,7 +416,7 @@ const endDrag = () => {
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.9);
-  color: white;
+  color: #fff;
   padding: 0.5rem;
   border-radius: 6px;
   font-size: 0.75rem;

@@ -176,7 +176,7 @@ onMounted(() => {
 <style scoped>
 
 .bulk-mode {
-  background: #f5f5f5;
+  background: var(--app-surface-muted);
   padding: 1.5rem;
   border-radius: 8px;
   margin-bottom: 2rem;
@@ -196,19 +196,19 @@ onMounted(() => {
 
 .form-group label {
   font-weight: 500;
-  color: #555;
+  color: var(--app-text-2);
 }
 
 .form-group input,
 .form-group select {
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--app-border);
   border-radius: 4px;
   font-size: 0.95rem;
 }
 
 .form-group small {
-  color: #777;
+  color: var(--app-text-3);
   font-size: 0.8rem;
 }
 
@@ -221,7 +221,7 @@ onMounted(() => {
 
 .date-range span,
 .time-range span {
-  color: #666;
+  color: var(--app-text-2);
   font-weight: 500;
 }
 

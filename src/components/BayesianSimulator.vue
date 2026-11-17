@@ -483,7 +483,7 @@ onMounted(() => {
 <style scoped>
 
 .bayesian-simulator {
-  background: white;
+  background: var(--app-surface);
   border-radius: 8px;
   padding: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -495,12 +495,12 @@ onMounted(() => {
 
 .simulator-header h3 {
   margin: 0 0 0.5rem 0;
-  color: #333;
+  color: var(--app-text);
 }
 
 .simulator-header p {
   margin: 0;
-  color: #666;
+  color: var(--app-text-2);
   font-size: 0.95rem;
 }
 
@@ -510,7 +510,7 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 1.5rem;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--app-surface-muted);
   border-radius: 8px;
   flex-wrap: wrap;
   gap: 1rem;
@@ -535,14 +535,14 @@ onMounted(() => {
 .time-range-selector label,
 .sensor-selector label {
   font-weight: 500;
-  color: #333;
+  color: var(--app-text);
   white-space: nowrap;
 }
 
 .time-range-selector select,
 .sensor-selector select {
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--app-border);
   border-radius: 4px;
   font-size: 0.95rem;
   min-width: 140px;
@@ -563,14 +563,14 @@ onMounted(() => {
 
 .stat-label {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--app-text-2);
   font-weight: 500;
 }
 
 .stat-value {
   font-size: 1.2rem;
   font-weight: bold;
-  color: #333;
+  color: var(--app-text);
 }
 
 .simulator-content {
@@ -590,20 +590,20 @@ onMounted(() => {
 .loading-message {
   padding: 2rem;
   text-align: center;
-  color: #666;
-  background: #f8f9fa;
+  color: var(--app-text-2);
+  background: var(--app-surface-muted);
   border-radius: 8px;
 }
 
 .error-message {
-  color: #d32f2f;
-  background: #ffebee;
+  color: var(--app-false);
+  background: var(--app-false-soft);
 }
 
 
 .chart-container {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   padding: 1rem;
 }
@@ -611,13 +611,13 @@ onMounted(() => {
 .on-periods {
   margin-top: 1rem;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--app-surface-muted);
   border-radius: 8px;
 }
 
 .on-periods h4 {
   margin: 0 0 0.75rem 0;
-  color: #333;
+  color: var(--app-text);
   font-size: 0.95rem;
 }
 
@@ -633,24 +633,24 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   padding: 0.5rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 4px;
   font-size: 0.85rem;
 }
 
 .period-time {
-  color: #333;
+  color: var(--app-text);
   font-family: monospace;
 }
 
 .period-duration {
-  color: #666;
+  color: var(--app-text-2);
   font-weight: 500;
 }
 
 .observations-section {
-  background: #f8f9fa;
+  background: var(--app-surface-muted);
   border-radius: 8px;
   padding: 1rem;
   max-height: 600px;
@@ -659,14 +659,14 @@ onMounted(() => {
 
 .observations-section h4 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--app-text);
 }
 
 .no-data {
   padding: 2rem;
   text-align: center;
-  color: #999;
-  background: white;
+  color: var(--app-text-3);
+  background: var(--app-surface);
   border-radius: 4px;
 }
 
@@ -677,20 +677,20 @@ onMounted(() => {
 }
 
 .observation-item {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 6px;
   padding: 0.75rem;
   transition: all 0.3s;
 }
 
 .observation-item.active {
-  border-color: #4CAF50;
-  background: #e8f5e9;
+  border-color: var(--app-true);
+  background: var(--app-true-soft);
 }
 
 .observation-item.has-data {
-  border-color: #2196F3;
+  border-color: var(--app-info);
 }
 
 .observation-info {
@@ -710,7 +710,7 @@ onMounted(() => {
 .entity-id {
   font-family: monospace;
   font-size: 0.85rem;
-  color: #333;
+  color: var(--app-text);
   word-break: break-all;
 }
 
@@ -724,49 +724,49 @@ onMounted(() => {
 }
 
 .entity-status.status-queued {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--app-surface-muted);
+  color: var(--app-text-2);
 }
 
 .entity-status.status-fetching {
-  background: #fff3e0;
-  color: #ff6f00;
+  background: var(--app-warning-soft);
+  color: var(--app-warning);
 }
 
 .entity-status.status-fetched {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--app-info-soft);
+  color: var(--app-info);
 }
 
 .entity-status.status-analyzing {
-  background: #fce4ec;
-  color: #c2185b;
+  background: var(--app-false-soft);
+  color: var(--app-accent);
 }
 
 .entity-status.status-completed {
-  background: #e8f5e9;
-  color: #388e3c;
+  background: var(--app-true-soft);
+  color: var(--app-true);
 }
 
 .entity-status.status-error {
-  background: #ffebee;
-  color: #c62828;
+  background: var(--app-false-soft);
+  color: var(--app-false-strong);
 }
 
 .entity-status.status-ready {
-  background: #e8f5e9;
-  color: #388e3c;
+  background: var(--app-true-soft);
+  color: var(--app-true);
 }
 
 .entity-status.status-no-data {
-  background: #fafafa;
-  color: #999;
+  background: var(--app-surface-muted);
+  color: var(--app-text-3);
 }
 
 .platform {
   font-size: 0.75rem;
-  color: #666;
-  background: #e3f2fd;
+  color: var(--app-text-2);
+  background: var(--app-info-soft);
   padding: 0.1rem 0.4rem;
   border-radius: 3px;
   align-self: flex-start;
@@ -781,7 +781,7 @@ onMounted(() => {
 
 .condition {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--app-text-2);
 }
 
 .probabilities {
@@ -798,7 +798,7 @@ onMounted(() => {
 
 .prob-label {
   font-size: 0.75rem;
-  color: #999;
+  color: var(--app-text-3);
   min-width: 70px;
 }
 
@@ -812,7 +812,7 @@ onMounted(() => {
 .prob-bar {
   flex: 1;
   height: 10px;
-  background: #f0f0f0;
+  background: var(--app-surface-muted);
   border-radius: 5px;
   overflow: hidden;
 }
@@ -823,11 +823,11 @@ onMounted(() => {
 }
 
 .prob-fill.true {
-  background: #4CAF50;
+  background: var(--app-true);
 }
 
 .prob-fill.false {
-  background: #f44336;
+  background: var(--app-false);
 }
 
 .observation-summary {
@@ -835,35 +835,35 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding-top: 0.25rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--app-border);
 }
 
 .summary-label {
   font-size: 0.75rem;
-  color: #666;
+  color: var(--app-text-2);
   font-weight: 500;
 }
 
 .summary-value {
   font-size: 0.85rem;
   font-weight: bold;
-  color: #2196F3;
+  color: var(--app-info);
 }
 
 .simulator-footer {
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--app-border);
   padding-top: 1rem;
 }
 
 .info-section h4 {
   margin: 0 0 0.5rem 0;
-  color: #333;
+  color: var(--app-text);
   font-size: 0.95rem;
 }
 
 .info-section p {
   margin: 0;
-  color: #666;
+  color: var(--app-text-2);
   font-size: 0.9rem;
   line-height: 1.5;
 }
