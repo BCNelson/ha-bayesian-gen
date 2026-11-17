@@ -74,24 +74,42 @@
       </n-collapse-transition>
     </n-card>
 
-    <div v-if="isAnalyzing">
-      
-      <!-- Filter controls available during analysis -->
-      <n-space v-if="analyzedEntities.length > 0" style="margin-bottom: 1.5rem">
-        <n-input
-          v-model:value="searchFilter"
-          placeholder="Filter entities..."
-          clearable
-          style="flex: 1"
-        />
-        <n-select
-          v-model:value="minDiscrimination"
-          :options="discriminationOptions"
-          style="width: 200px"
-        />
-      </n-space>
-      
-      <!-- Show analyzed entities as they come in -->
+    <n-alert v-if="error" type="error" class="error-alert">
+      {{ error }}
+    </n-alert>
+
+    <template v-if="analyzedEntities.length > 0">
+      <div class="analyzer-toolbar">
+        <div class="filter-row">
+          <n-input
+            v-model:value="searchFilter"
+            placeholder="Filter entities..."
+            clearable
+            size="small"
+            class="filter-input"
+          />
+          <n-select
+            v-model:value="minDiscrimination"
+            :options="discriminationOptions"
+            size="small"
+            class="filter-select"
+          />
+        </div>
+        <div class="selection-row">
+          <n-text depth="3" class="selection-label">Select</n-text>
+          <n-button-group size="tiny">
+            <n-button @click="selectTop(5)">Top 5</n-button>
+            <n-button @click="selectTop(10)">Top 10</n-button>
+            <n-button @click="selectTop(20)">Top 20</n-button>
+            <n-button @click="selectAll">All shown</n-button>
+            <n-button @click="selectNone">None</n-button>
+          </n-button-group>
+          <n-tag size="small" :type="selectedEntities.length > 0 ? 'success' : 'default'" :bordered="false" class="selection-count">
+            {{ selectedEntities.length }} selected
+          </n-tag>
+        </div>
+      </div>
+
       <div v-if="filteredEntities.length > 0" class="entity-cards">
         <EntityCard
           v-for="group in filteredEntities"
@@ -101,52 +119,15 @@
           @toggle-selection="toggleEntitySelection"
         />
       </div>
-    </div>
-    
-    <n-alert v-else-if="error" type="error" class="error-alert">
-      {{ error }}
-    </n-alert>
-    
-    <div v-else-if="!isAnalyzing && analyzedEntities.length > 0" class="entity-cards">
-        <EntityCard
-          v-for="group in filteredEntities"
-          :key="group.entityId"
-          :group="group"
-          :selected-entities="selectedEntities"
-          @toggle-selection="toggleEntitySelection"
-        />
-    </div>
-    
-    <!-- Compact Action Bar -->
-    <div v-if="analyzedEntities.length > 0 && !isAnalyzing" class="action-bar">
-      <div class="selection-buttons">
-        <n-button @click="selectTop(5)" size="small">Top 5</n-button>
-        <n-button @click="selectTop(10)" size="small" type="info">Top 10</n-button>
-        <n-button @click="selectTop(20)" size="small">Top 20</n-button>
-        <n-button @click="selectAll" size="small">All</n-button>
-        <n-button @click="selectNone" size="small">Clear</n-button>
-      </div>
-      <div class="generate-section">
-        <n-text v-if="selectedEntities.length > 0" style="margin-right: 1rem">
-          <strong>{{ selectedEntities.length }}</strong> selected
-        </n-text>
-        <n-button 
-          @click="generateConfig" 
-          type="primary"
-          size="small"
-          :disabled="selectedEntities.length === 0"
-        >
-          Generate Config
-        </n-button>
-      </div>
-    </div>
-    
-    <n-empty v-else description="No analysis results yet" class="empty-state">
+      <n-empty v-else size="small" description="No entities match the current filter" />
+    </template>
+
+    <n-empty v-else-if="!isAnalyzing" description="No analysis results yet" class="empty-state">
       <template #extra>
         <n-ol>
           <n-li>Connect to Home Assistant</n-li>
           <n-li>Add at least one TRUE and one FALSE time period</n-li>
-          <n-li>Click "Analyze Entities"</n-li>
+          <n-li>Click "Analyze entities"</n-li>
         </n-ol>
       </template>
     </n-empty>
@@ -161,6 +142,7 @@ import {
   NAlert, 
   NText, 
   NButton,
+  NButtonGroup,
   NInput,
   NSelect,
   NProgress,
@@ -177,6 +159,7 @@ import {
 } from 'naive-ui'
 import type { EntityProbability, TimePeriod } from '../types/bayesian'
 import EntityCard from './EntityCard.vue'
+import { STORAGE_KEYS, readJSON, writeJSON, selectionKey } from '../utils/sessionStore'
 
 const props = defineProps<{
   analyzedEntities: EntityProbability[]
@@ -361,193 +344,137 @@ const pendingEntityStatusMap = computed(() => {
   return new Map(incomplete)
 })
 
+const keyOf = (e: EntityProbability) => selectionKey(e.entityId, e.state)
+
+/** Replace the selection, persist it and notify the parent. */
+const setSelection = (entities: EntityProbability[]) => {
+  selectedEntities.value = entities
+  writeJSON(STORAGE_KEYS.selectedEntities, entities.map(keyOf))
+  emit('entitiesSelected', entities)
+}
+
+const topByDiscrimination = (count: number) =>
+  props.analyzedEntities
+    .slice()
+    .sort((a, b) => b.discriminationPower - a.discriminationPower)
+    .slice(0, count)
+
+/**
+ * When an analysis run finishes, re-resolve the selection against the fresh
+ * results: keep the current selection (by entity+state) if there is one,
+ * otherwise restore the saved one, otherwise pick the top 10.
+ */
 watch(() => props.isAnalyzing, (isAnalyzing, wasAnalyzing) => {
-  // Only auto-select when analysis completes (goes from true to false)
-  // and only if user hasn't manually selected any entities
-  if (wasAnalyzing && !isAnalyzing && selectedEntities.value.length === 0 && props.analyzedEntities.length > 0) {
-    const topEntities = props.analyzedEntities
-      .sort((a, b) => b.discriminationPower - a.discriminationPower)
-      .slice(0, 10)
-    
-    selectedEntities.value = topEntities
-    emit('entitiesSelected', selectedEntities.value)
-  }
+  if (!wasAnalyzing || isAnalyzing || props.analyzedEntities.length === 0) return
+
+  const byKey = new Map(props.analyzedEntities.map(e => [keyOf(e), e]))
+  const wanted = selectedEntities.value.length > 0
+    ? selectedEntities.value.map(keyOf)
+    : readJSON<string[]>(STORAGE_KEYS.selectedEntities, [])
+  const resolved = (Array.isArray(wanted) ? wanted : [])
+    .map(k => byKey.get(k))
+    .filter((e): e is EntityProbability => !!e)
+
+  setSelection(resolved.length > 0 ? resolved : topByDiscrimination(10))
 })
 
-
 const toggleEntitySelection = (entity: EntityProbability) => {
-  const index = selectedEntities.value.findIndex(e => 
-    e.entityId === entity.entityId && e.state === entity.state
-  )
-  
-  if (index === -1) {
-    selectedEntities.value.push(entity)
-  } else {
-    selectedEntities.value.splice(index, 1)
-  }
-  
-  emit('entitiesSelected', selectedEntities.value)
+  const key = keyOf(entity)
+  const exists = selectedEntities.value.some(e => keyOf(e) === key)
+  setSelection(exists
+    ? selectedEntities.value.filter(e => keyOf(e) !== key)
+    : [...selectedEntities.value, entity])
 }
 
 const selectTop = (count: number) => {
-  const allStates = filteredEntities.value
-    .flatMap(group => group.states)
-    .sort((a, b) => b.discriminationPower - a.discriminationPower)
-    .slice(0, count)
-  
-  selectedEntities.value = allStates
-  emit('entitiesSelected', selectedEntities.value)
+  setSelection(
+    filteredEntities.value
+      .flatMap(group => group.states)
+      .sort((a, b) => b.discriminationPower - a.discriminationPower)
+      .slice(0, count)
+  )
 }
 
 const selectAll = () => {
-  const allStates = filteredEntities.value.flatMap(group => group.states)
-  selectedEntities.value = allStates
-  emit('entitiesSelected', selectedEntities.value)
+  setSelection(filteredEntities.value.flatMap(group => group.states))
 }
 
 const selectNone = () => {
-  selectedEntities.value = []
-  emit('entitiesSelected', selectedEntities.value)
-}
-
-const generateConfig = () => {
-  emit('entitiesSelected', selectedEntities.value)
+  setSelection([])
 }
 
 </script>
 
 <style scoped>
-.analyzer-container {
+.analyzer-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  gap: 0.75rem;
-  overflow: hidden;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  box-shadow: var(--app-shadow-sm);
 }
 
-.status-bar {
-  background: #ffffff;
-  border-radius: 6px;
-  padding: 0.75rem;
-  border: 1px solid #dee2e6;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.status-content {
+.filter-row {
   display: flex;
-  align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
-.status-text {
-  display: flex;
-  align-items: center;
+.filter-input {
   flex: 1;
+  min-width: 0;
 }
 
-.current-entity {
-  color: #495057;
-  margin-left: 0.5rem;
-  font-weight: 500;
+.filter-select {
+  width: 190px;
+  flex-shrink: 0;
 }
 
-.queue-container {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #dee2e6;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.filter-bar {
+.selection-row {
   display: flex;
-  gap: 0.75rem;
   align-items: center;
-  padding: 0.5rem;
-  background: white;
-  border-radius: 4px;
-  border: 1px solid #dee2e6;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.entity-cards-container {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0.5rem;
-  min-height: 0;
+.selection-label {
+  font-size: 0.8rem;
+}
+
+.selection-count {
+  margin-left: auto;
 }
 
 .entity-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 0.75rem;
-}
-
-.update-message {
-  display: block;
-  text-align: center;
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
 }
 
 .error-alert {
   margin-top: 0.5rem;
 }
 
-.action-bar {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  background: #ffffff;
-  border-radius: 6px;
-  border: 1px solid #dee2e6;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.selection-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.generate-section {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
 .empty-state {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
+  padding: 2rem 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 600px) {
+  .filter-row {
+    flex-direction: column;
+  }
+
+  .filter-select {
+    width: 100%;
+  }
+
   .entity-cards {
     grid-template-columns: 1fr;
-  }
-  
-  .status-content {
-    flex-wrap: wrap;
-  }
-  
-  .filter-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .filter-bar .n-input,
-  .filter-bar .n-select {
-    max-width: 100% !important;
-    width: 100% !important;
-  }
-}
-
-@media (min-width: 1600px) {
-  .entity-cards {
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   }
 }
 </style>
