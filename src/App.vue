@@ -27,6 +27,11 @@ const {
   cachedHistoricalData,
   entityBuffer, // NEW: Buffer access
   connectToHA,
+  resumeSession,
+  hasResumableSession,
+  disconnectFromHA,
+  entityScope,
+  scopeOptions,
   updatePeriods,
   analyzeEntities,
   updateGeneratedConfig,
@@ -78,18 +83,11 @@ const handleConnect = async (connection: any) => {
 const handleConnectionStatus = () => {
 }
 
-// Auto-connect on mount if credentials are saved
+// Finish an OAuth redirect, or auto-connect with remembered credentials
 onMounted(async () => {
-  const savedUrl = localStorage.getItem('ha_url')
-  const savedToken = localStorage.getItem('ha_token')
-  
-  if (savedUrl && savedToken && !isConnected.value) {
+  if (hasResumableSession() && !isConnected.value) {
     isAutoConnecting.value = true
-    const connection = {
-      url: savedUrl,
-      token: savedToken
-    }
-    await connectToHA(connection)
+    await resumeSession()
     isAutoConnecting.value = false
   }
 })
@@ -200,6 +198,7 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
                       :connection-error="connectionError"
                       :is-auto-connecting="isAutoConnecting"
                       @connect="handleConnect"
+                      @disconnect="disconnectFromHA"
                       @connection-status="handleConnectionStatus"
                     />
                     <template #fallback>
@@ -213,6 +212,8 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
                     <EntityScoreDisplay 
                       v-if="isConnected && entities.length > 0"
                       :entities="entities"
+                      v-model:scope="entityScope"
+                      :scope-options="scopeOptions"
                     />
                     <template #fallback>
                       <div v-if="isConnected && entities.length > 0">

@@ -1,5 +1,5 @@
 <template>
-  <n-form 
+  <n-form
     ref="formRef"
     :model="formModel"
     :rules="rules"
@@ -16,8 +16,17 @@
         Include the protocol (http/https) and port if needed
       </template>
     </n-form-item>
-    
-    <n-form-item label="Long-Lived Access Token" path="token">
+
+    <n-form-item label="Sign-in method" path="method">
+      <n-radio-group v-model:value="formModel.method" :disabled="props.isConnected">
+        <n-space vertical>
+          <n-radio value="oauth">Log in with Home Assistant (recommended)</n-radio>
+          <n-radio value="token">Long-lived access token</n-radio>
+        </n-space>
+      </n-radio-group>
+    </n-form-item>
+
+    <n-form-item v-if="formModel.method === 'token'" label="Long-Lived Access Token" path="token">
       <n-input
         v-model:value="formModel.token"
         type="password"
@@ -26,87 +35,90 @@
         :disabled="props.isConnected"
       />
       <template #feedback>
-        Get this from your Home Assistant profile page
+        Create one under your Home Assistant profile → Security → Long-lived access tokens
       </template>
     </n-form-item>
-    
-    <n-collapse>
-      <n-collapse-item title="CORS Setup Instructions" name="cors">
-        <n-alert type="info" :show-icon="false">
-          <n-text>Add this to your </n-text>
-          <n-code>configuration.yaml</n-code>
-          <n-text>:</n-text>
-          <n-code :code="corsYamlConfig" language="yaml" />
-          <n-text>Then restart Home Assistant.</n-text>
-        </n-alert>
-      </n-collapse-item>
-    </n-collapse>
-    
+
+    <n-form-item :show-feedback="false" :show-label="false">
+      <n-checkbox v-model:checked="formModel.remember" :disabled="props.isConnected">
+        Remember me on this browser
+      </n-checkbox>
+    </n-form-item>
+
     <n-space vertical>
-      <n-button 
-        type="primary" 
-        block 
+      <n-button
+        v-if="!props.isConnected"
+        type="primary"
+        block
         attr-type="submit"
         :loading="isConnecting"
-        :disabled="props.isConnected"
       >
-        {{ props.isConnected ? 'Connected' : (isConnecting ? 'Connecting...' : 'Connect') }}
+        {{ isConnecting ? 'Connecting...' : (formModel.method === 'oauth' ? 'Log in & Connect' : 'Connect') }}
       </n-button>
-      
-      <n-alert 
-        v-if="error || props.connectionError" 
+
+      <n-space v-else>
+        <n-button @click="emit('disconnect', false)">Disconnect</n-button>
+        <n-button type="error" ghost @click="handleForget">Disconnect &amp; forget credentials</n-button>
+      </n-space>
+
+      <n-alert
+        v-if="error || props.connectionError"
         type="error"
         closable
         @close="error = ''"
       >
         {{ error || props.connectionError }}
-        <template v-if="(error || props.connectionError)?.includes('CORS')">
-          <n-divider />
-          <n-text strong>CORS Error Solution:</n-text>
-          <br />
-          <n-text>Add this to your Home Assistant </n-text>
-          <n-code>configuration.yaml</n-code>
-          <n-text>:</n-text>
-          <n-code :code="corsYamlConfig" language="yaml" />
-          <n-text>Then restart Home Assistant and try connecting again.</n-text>
-        </template>
       </n-alert>
-      
-      <n-alert 
-        v-if="props.isAutoConnecting" 
+
+      <n-alert
+        v-if="props.isAutoConnecting"
         type="info"
       >
         Connecting automatically with saved credentials...
       </n-alert>
-      
-      <n-alert 
-        v-if="props.isConnected" 
+
+      <n-alert
+        v-if="props.isConnected"
         type="success"
       >
         Connected successfully!
       </n-alert>
+
+      <n-collapse>
+        <n-collapse-item title="Troubleshooting" name="troubleshooting">
+          <n-text depth="3">
+            This app talks to Home Assistant over its WebSocket API, which needs no CORS setup.
+            The login option additionally calls Home Assistant's <n-text code>/auth/token</n-text> endpoint from
+            this page; if login fails with a network error, a reverse proxy in front of Home Assistant may be
+            stripping CORS headers — use a long-lived access token instead. Pages served over HTTPS cannot
+            connect to a plain-HTTP Home Assistant URL.
+          </n-text>
+        </n-collapse-item>
+      </n-collapse>
     </n-space>
   </n-form>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, reactive, computed } from 'vue'
-import { 
-  NForm, 
-  NFormItem, 
-  NInput, 
-  NButton, 
-  NAlert, 
-  NSpace, 
-  NCollapse, 
+import { ref, onMounted, watch, reactive } from 'vue'
+import {
+  NForm,
+  NFormItem,
+  NInput,
+  NButton,
+  NAlert,
+  NSpace,
+  NCollapse,
   NCollapseItem,
-  NCode,
   NText,
-  NDivider,
+  NRadioGroup,
+  NRadio,
+  NCheckbox,
   type FormInst,
   type FormRules
 } from 'naive-ui'
-import type { HAConnection } from '../types/homeAssistant'
+import type { HAAuthMethod, HAConnection } from '../types/homeAssistant'
+import { getLastUsedUrl, getSavedConnection } from '../services/haAuth'
 
 const props = defineProps<{
   isConnected?: boolean
@@ -116,6 +128,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   connect: [connection: HAConnection]
+  disconnect: [forget: boolean]
   connectionStatus: [status: boolean]
 }>()
 
@@ -125,14 +138,9 @@ const error = ref('')
 
 const formModel = reactive({
   url: '',
-  token: ''
-})
-
-const corsYamlConfig = computed(() => {
-  const currentOrigin = window.location.origin
-  return `http:
-  cors_allowed_origins:
-    - "${currentOrigin}"`
+  method: 'oauth' as HAAuthMethod,
+  token: '',
+  remember: true
 })
 
 const rules: FormRules = {
@@ -146,8 +154,10 @@ const rules: FormRules = {
       validator(_, value) {
         if (!value) return true
         try {
-          new URL(value)
-          return true
+          const u = new URL(value)
+          return u.protocol === 'http:' || u.protocol === 'https:'
+            ? true
+            : new Error('URL must start with http:// or https://')
         } catch {
           return new Error('Please enter a valid URL')
         }
@@ -157,37 +167,46 @@ const rules: FormRules = {
   ],
   token: [
     {
-      required: true,
-      message: 'Please enter your access token',
+      validator(_, value) {
+        if (formModel.method === 'token' && !value) return new Error('Please enter your access token')
+        return true
+      },
       trigger: ['blur', 'input']
     }
   ]
 }
 
 onMounted(() => {
-  const savedUrl = localStorage.getItem('ha_url')
-  const savedToken = localStorage.getItem('ha_token')
-  
-  if (savedUrl) formModel.url = savedUrl
-  if (savedToken) formModel.token = savedToken
+  const saved = getSavedConnection()
+  if (saved) {
+    formModel.url = saved.url
+    formModel.method = saved.method
+    formModel.token = saved.token ?? ''
+  } else {
+    formModel.url = getLastUsedUrl() ?? ''
+  }
 })
 
 const handleConnect = async () => {
-  const valid = await formRef.value?.validate().catch(() => false)
+  const valid = await formRef.value?.validate().then(() => true).catch(() => false)
   if (!valid) return
-  
+
   isConnecting.value = true
   error.value = ''
-  
+
   const connection: HAConnection = {
     url: formModel.url,
-    token: formModel.token
+    method: formModel.method,
+    token: formModel.method === 'token' ? formModel.token : undefined,
+    remember: formModel.remember
   }
-  
-  localStorage.setItem('ha_url', formModel.url)
-  localStorage.setItem('ha_token', formModel.token)
-  
+
   emit('connect', connection)
+}
+
+const handleForget = () => {
+  formModel.token = ''
+  emit('disconnect', true)
 }
 
 watch(() => [props.isConnected, props.connectionError], () => {

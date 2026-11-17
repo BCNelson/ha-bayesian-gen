@@ -1,7 +1,8 @@
 import type { HAHistoryResponse } from '../types/homeAssistant'
 import type { TimePeriod } from '../types/bayesian'
-interface IHomeAssistantAPI {
-  getHistory(startTime: Date, endTime?: Date, entityIds?: string[]): Promise<HAHistoryResponse>
+
+export interface IHomeAssistantHistoryApi {
+  getHistory(startTime: Date, endTime: Date | undefined, entityIds: string[]): Promise<HAHistoryResponse>
 }
 
 export interface FetchedEntity {
@@ -15,14 +16,19 @@ export interface FetchProgress {
   message?: string
 }
 
+/**
+ * Fetches entity histories for the analysis time range. A call to
+ * `fetchEntities` issues a single batched history request (the client splits
+ * very large batches into several websocket messages) and returns one
+ * `FetchedEntity` per requested id that has history.
+ */
 export class EntityFetcher {
-  private haApi: IHomeAssistantAPI | null = null
+  private haApi: IHomeAssistantHistoryApi | null = null
   private earliestStart: Date | null = null
   private latestEnd: Date | null = null
   private progressCallback?: (entityId: string, status: FetchProgress['status'], message?: string) => void
-  private concurrentLimit = 2
 
-  setApi(haApi: IHomeAssistantAPI) {
+  setApi(haApi: IHomeAssistantHistoryApi) {
     this.haApi = haApi
   }
 
@@ -39,52 +45,31 @@ export class EntityFetcher {
     if (!this.haApi || !this.earliestStart || !this.latestEnd) {
       throw new Error('EntityFetcher not properly configured')
     }
+    if (entityIds.length === 0) return []
+
+    entityIds.forEach(id => this.progressCallback?.(id, 'fetching', 'Fetching history...'))
+
+    let history: HAHistoryResponse
+    try {
+      history = await this.haApi.getHistory(this.earliestStart, this.latestEnd, entityIds)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (error as any)?.message ?? 'Fetch failed'
+      console.warn(`Failed to fetch history for ${entityIds.length} entities:`, error)
+      entityIds.forEach(id => this.progressCallback?.(id, 'error', message))
+      return []
+    }
 
     const results: FetchedEntity[] = []
-    const semaphore = new Semaphore(this.concurrentLimit)
-
-    const fetchPromises = entityIds.map(async (entityId) => {
-      await semaphore.acquire()
-      try {
-        return await this.fetchSingleEntity(entityId)
-      } finally {
-        semaphore.release()
+    for (const entityId of entityIds) {
+      const entries = history[entityId]
+      if (!entries || entries.length === 0) {
+        this.progressCallback?.(entityId, 'error', 'No history in the selected range')
+        continue
       }
-    })
-
-    const settledResults = await Promise.allSettled(fetchPromises)
-    
-    for (const result of settledResults) {
-      if (result.status === 'fulfilled' && result.value) {
-        results.push(result.value)
-      }
-    }
-
-    return results
-  }
-
-  private async fetchSingleEntity(entityId: string): Promise<FetchedEntity | null> {
-    try {
-      this.progressCallback?.(entityId, 'fetching', 'Fetching history...')
-
-      const rawHistory = await this.haApi!.getHistory(
-        this.earliestStart!,
-        this.latestEnd!,
-        [entityId]
-      )
-
-      // Deep clone to avoid reference issues
-      const history = JSON.parse(JSON.stringify(rawHistory))
-      
       this.progressCallback?.(entityId, 'fetched', 'History fetched')
-      
-      return { entityId, history }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Fetch failed'
-      this.progressCallback?.(entityId, 'error', message)
-      console.warn(`Failed to fetch entity ${entityId}:`, error)
-      return null
+      results.push({ entityId, history: { [entityId]: entries } })
     }
+    return results
   }
 
   cleanup() {
@@ -92,34 +77,5 @@ export class EntityFetcher {
     this.earliestStart = null
     this.latestEnd = null
     this.progressCallback = undefined
-  }
-}
-
-class Semaphore {
-  private permits: number
-  private waitQueue: (() => void)[] = []
-
-  constructor(permits: number) {
-    this.permits = permits
-  }
-
-  async acquire(): Promise<void> {
-    return new Promise((resolve) => {
-      if (this.permits > 0) {
-        this.permits--
-        resolve()
-      } else {
-        this.waitQueue.push(resolve)
-      }
-    })
-  }
-
-  release(): void {
-    if (this.waitQueue.length > 0) {
-      const nextResolve = this.waitQueue.shift()!
-      nextResolve()
-    } else {
-      this.permits++
-    }
   }
 }

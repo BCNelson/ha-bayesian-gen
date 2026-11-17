@@ -6,6 +6,11 @@ export interface EntityScore {
   reasons: string[]
 }
 
+const EXCLUDED_DOMAINS = new Set([
+  'automation', 'script', 'scene', 'group', 'zone',
+  'update', 'button', 'input_button', 'event', 'image', 'persistent_notification', 'tts', 'stt', 'conversation'
+])
+
 export class EntityScorer {
   private readonly domainWeights: Record<string, number> = {
     binary_sensor: 100,
@@ -28,8 +33,7 @@ export class EntityScorer {
     select: 5,
     input_select: 5,
     input_text: 2,
-    text: 2,
-    image: -100
+    text: 2
   }
 
   private readonly stateTypeWeights: Record<string, number> = {
@@ -67,22 +71,16 @@ export class EntityScorer {
       reasons.push(`Recent activity: +${changeFrequencyScore}`)
     }
 
-    const attributeScore = this.getAttributeScore(entity)
-    score += attributeScore
-    if (attributeScore > 0) {
-      reasons.push(`Rich attributes: +${attributeScore}`)
+    const metadataScore = this.getMetadataScore(entity)
+    score += metadataScore
+    if (metadataScore > 0) {
+      reasons.push(`Device class / area: +${metadataScore}`)
     }
 
     const availabilityPenalty = this.getAvailabilityPenalty(entity)
     score += availabilityPenalty
     if (availabilityPenalty < 0) {
       reasons.push(`Availability issues: ${availabilityPenalty}`)
-    }
-
-    const namingScore = this.getNamingScore(entity)
-    score += namingScore
-    if (namingScore > 0) {
-      reasons.push(`Clear naming: +${namingScore}`)
     }
 
     return {
@@ -133,20 +131,11 @@ export class EntityScorer {
     return 0
   }
 
-  private getAttributeScore(entity: HAEntity): number {
-    if (!entity.attributes) return 0
-    
-    const attributeCount = Object.keys(entity.attributes).length
-    const meaningfulAttributes = Object.keys(entity.attributes).filter(
-      key => !['friendly_name', 'icon', 'entity_id', 'unit_of_measurement'].includes(key)
-    ).length
-    
+  /** Small bonus for entities with a device_class or an assigned area (registry). */
+  private getMetadataScore(entity: HAEntity): number {
     let score = 0
-    if (attributeCount > 5) score += 5
-    if (meaningfulAttributes > 2) score += 10
-    
-    if (entity.attributes.device_class) score += 5
-    
+    if (entity.attributes?.device_class) score += 5
+    if (entity.meta?.area_id) score += 5
     return score
   }
 
@@ -162,16 +151,22 @@ export class EntityScorer {
     return 0
   }
 
-  private getNamingScore(entity: HAEntity): number {
-    const name = entity.entity_id.split('.')[1]
-    
-    if (name.includes('_sensor_') || name.includes('_switch_')) return 5
-    
-    if (name.length > 50) return -5
-    
-    if (/^[a-z0-9_]+$/.test(name)) return 3
-    
-    return 0
+  /**
+   * Default candidate filter: drops entities that are disabled, hidden, or
+   * config/diagnostic (entity_category, from the entity registry), helper/
+   * control domains, and entities with no usable current state.
+   */
+  isRelevantEntity(entity: HAEntity): boolean {
+    const meta = entity.meta
+    if (meta?.disabled || meta?.hidden) return false
+    if (meta?.entity_category === 'config' || meta?.entity_category === 'diagnostic') return false
+    const domain = entity.entity_id.split('.')[0]
+    if (EXCLUDED_DOMAINS.has(domain)) return false
+    return entity.state !== 'unavailable' && entity.state !== 'unknown' && entity.state !== ''
+  }
+
+  filterRelevantEntities(entities: HAEntity[]): HAEntity[] {
+    return entities.filter(e => this.isRelevantEntity(e))
   }
 
   filterAndSortEntities(entities: HAEntity[], selectedEntityIds?: string[]): string[] {
@@ -182,17 +177,7 @@ export class EntityScorer {
       return scores.map(s => s.entityId)
     }
 
-    const relevantEntities = entities.filter(entity => {
-      const domain = entity.entity_id.split('.')[0]
-      const excludedDomains = [
-        'automation', 'script', 'scene', 'group', 'zone', 
-        'update', 'button', 'persistent_notification'
-      ]
-      return !excludedDomains.includes(domain) &&
-             entity.state !== 'unavailable' &&
-             entity.state !== 'unknown' &&
-             entity.state !== ''
-    })
+    const relevantEntities = this.filterRelevantEntities(entities)
 
     const scores = this.scoreEntities(relevantEntities)
     return scores.map(s => s.entityId)

@@ -1,14 +1,18 @@
 import type { HAEntity, HAHistoryResponse } from '../types/homeAssistant'
 import type { TimePeriod, EntityProbability } from '../types/bayesian'
 
-interface IHomeAssistantAPI {
-  testConnection(): Promise<boolean>
-  getStates(): Promise<HAEntity[]>
-  getHistory(startTime: Date, endTime?: Date, entityIds?: string[]): Promise<HAHistoryResponse>
-}
 import { WorkerPool } from './workerPool'
-import { EntityFetcher } from './entityFetcher'
+import { EntityFetcher, type IHomeAssistantHistoryApi } from './entityFetcher'
 import { EntityScorer, type EntityScore } from './entityScorer'
+
+/** Entity ids per history request */
+const FETCH_BATCH_SIZE = 10
+
+const chunkIds = (ids: string[], size: number): string[][] => {
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size))
+  return out
+}
 
 export interface AnalysisProgress {
   current: number
@@ -51,7 +55,7 @@ export class AnalysisOrchestrator {
   }
 
   async analyzeEntities(
-    haApi: IHomeAssistantAPI,
+    haApi: IHomeAssistantHistoryApi,
     entities: HAEntity[],
     periods: TimePeriod[],
     selectedEntityIds?: string[]
@@ -69,8 +73,10 @@ export class AnalysisOrchestrator {
       this.callbacks.onEntityStatus?.(entityId, { status, message })
     })
 
-    // Process entities with immediate result display
-    const fetchQueue = [...relevantEntityIds]
+    // Fetch histories in batches (one history/history_during_period request per
+    // batch, at most `maxConcurrentFetches` in flight) and analyze each entity
+    // as soon as its batch arrives, so results still stream into the UI.
+    const fetchQueue = chunkIds(relevantEntityIds, FETCH_BATCH_SIZE)
     const maxConcurrentFetches = 2
     let activeFetches = 0
 
@@ -81,62 +87,60 @@ export class AnalysisOrchestrator {
         }
       }
 
-      const processNextEntity = () => {
+      const processNextBatch = () => {
         while (activeFetches < maxConcurrentFetches && fetchQueue.length > 0) {
-          const entityId = fetchQueue.shift()!
+          const batch = fetchQueue.shift()!
           activeFetches++
-          this.processSingleEntity(entityId, periods, (results) => {
-            // Accumulate results for return value
+          this.processBatch(batch, periods, (results) => {
             allResults.push(...results)
-            
-            // Pass individual results to callback for immediate display
             if (results.length > 0) {
               this.callbacks.onResult?.(results)
             }
-            
             completedCount++
             this.updateProgress(completedCount, relevantEntityIds.length)
-            
+          }).finally(() => {
             activeFetches--
-            processNextEntity()
+            processNextBatch()
             checkCompletion()
           })
         }
       }
 
-      processNextEntity()
+      processNextBatch()
+      checkCompletion()
     })
 
     return allResults
   }
 
-  private async processSingleEntity(
-    entityId: string,
+  /**
+   * Fetch one batch of entity histories, then analyze each entity.
+   * `onEntityDone` is called exactly once per entity id in the batch.
+   */
+  private async processBatch(
+    entityIds: string[],
     periods: TimePeriod[],
-    onComplete: (results: EntityProbability[]) => void
+    onEntityDone: (results: EntityProbability[]) => void
   ): Promise<void> {
+    let fetched: Awaited<ReturnType<EntityFetcher['fetchEntities']>> = []
     try {
-      // Fetch entity history
-      const histories = await this.entityFetcher.fetchEntities([entityId])
-      if (histories.length === 0) {
-        onComplete([])
-        return
-      }
-      
-      const { history } = histories[0]
-      
-      // Cache the fetched data immediately for simulation
-      this.callbacks.onEntityFetched?.(entityId, history[entityId] || [])
-      
-      // Analyze immediately after fetch
-      const results = await this.analyzeEntity(entityId, history, periods)
-      
-      // Call completion callback with results
-      onComplete(results)
+      fetched = await this.entityFetcher.fetchEntities(entityIds)
     } catch (error) {
-      console.warn(`Failed to process entity ${entityId}:`, error)
-      onComplete([])
+      console.warn(`Failed to fetch batch of ${entityIds.length} entities:`, error)
     }
+    const fetchedIds = new Set(fetched.map(f => f.entityId))
+    entityIds.filter(id => !fetchedIds.has(id)).forEach(() => onEntityDone([]))
+
+    await Promise.all(fetched.map(async ({ entityId, history }) => {
+      try {
+        // Cache the fetched data immediately for simulation
+        this.callbacks.onEntityFetched?.(entityId, history[entityId] || [])
+        onEntityDone(await this.analyzeEntity(entityId, history, periods))
+      } catch (error) {
+        console.warn(`Failed to process entity ${entityId}:`, error)
+        onEntityDone([])
+      }
+    }))
   }
 
   private async analyzeEntity(

@@ -1,18 +1,64 @@
 import { ref, computed, onUnmounted, shallowRef, markRaw } from 'vue'
-import { HomeAssistantAPI } from '../services/homeAssistant'
+import type { Auth } from 'home-assistant-js-websocket'
+import { HomeAssistantClient } from '../services/homeAssistant'
+import {
+  createAuth,
+  completeAuthCallback,
+  describeAuthError,
+  forgetCredentials,
+  getSavedConnection,
+  isAuthCallback
+} from '../services/haAuth'
+import { EMPTY_SCOPE, entityDomain, enrichEntities, filterByScope } from '../services/haRegistries'
 import { BayesianCalculator } from '../services/bayesianCalculator'
 import { AnalysisOrchestrator } from '../services/analysisOrchestrator'
 import { StreamingEntityBuffer } from '../services/entityBuffer'
-import type { HAConnection, HAEntity } from '../types/homeAssistant'
+import { EntityScorer } from '../services/entityScorer'
+import type {
+  EntityScope,
+  EntityScopeOptions,
+  HAConnection,
+  HAEntity,
+  HARegistries,
+  ScopeOption
+} from '../types/homeAssistant'
 import type { TimePeriod, EntityProbability, BayesianSensorConfig } from '../types/bayesian'
 
 export const useBayesianAnalysis = () => {
   const haConnection = ref<HAConnection | null>(null)
-  const haApi = ref<HomeAssistantAPI | null>(null)
+  const haApi = shallowRef<HomeAssistantClient | null>(null)
   const isConnected = ref(false)
   const connectionError = ref<string | null>(null)
-  
+  const registries = shallowRef<HARegistries | null>(null)
+
   const entities = ref<HAEntity[]>([])
+
+  // Entity scope (areas / floors / labels / domains) chosen on the connection step
+  const entityScope = ref<EntityScope>({ ...EMPTY_SCOPE })
+  const scopedEntities = computed(() => filterByScope(entities.value, entityScope.value))
+  const scopeScorer = new EntityScorer()
+  /** In-scope entities that pass the default filters, i.e. what "Analyze" will process */
+  const scopedCandidateCount = computed(() => scopeScorer.filterRelevantEntities(scopedEntities.value).length)
+  const scopeOptions = computed<EntityScopeOptions>(() => {
+    const byLabel = (a: ScopeOption, b: ScopeOption) => a.label.localeCompare(b.label)
+    const regs = registries.value
+    const usedAreas = new Set(entities.value.map(e => e.meta?.area_id).filter(Boolean))
+    const usedFloors = new Set(entities.value.map(e => e.meta?.floor_id).filter(Boolean))
+    const usedLabels = new Set(entities.value.flatMap(e => e.meta?.labels ?? []))
+    const domains = Array.from(new Set(entities.value.map(e => entityDomain(e.entity_id))))
+    return {
+      areas: (regs?.areas ?? []).filter(a => usedAreas.has(a.area_id))
+        .map(a => ({ label: a.name, value: a.area_id })).sort(byLabel),
+      floors: (regs?.floors ?? []).filter(f => usedFloors.has(f.floor_id))
+        .map(f => ({ label: f.name, value: f.floor_id })).sort(byLabel),
+      labels: (regs?.labels ?? []).filter(l => usedLabels.has(l.label_id))
+        .map(l => ({ label: l.name, value: l.label_id })).sort(byLabel),
+      domains: domains.map(d => ({ label: d, value: d })).sort(byLabel)
+    }
+  })
+  const setEntityScope = (scope: EntityScope) => {
+    entityScope.value = scope
+  }
   const periods = ref<TimePeriod[]>([])
   const analyzedEntities = shallowRef<EntityProbability[]>([])
   const generatedConfig = ref<BayesianSensorConfig | null>(null)
@@ -70,6 +116,7 @@ export const useBayesianAnalysis = () => {
   
   onUnmounted(() => {
     orchestrator.terminate()
+    closeClient()
   })
   
   const canAnalyze = computed(() => {
@@ -78,27 +125,87 @@ export const useBayesianAnalysis = () => {
     return isConnected.value && truePeriods.length > 0 && falsePeriods.length > 0
   })
   
-  const connectToHA = async (connection: HAConnection) => {
+  const closeClient = () => {
+    haApi.value?.close()
+    haApi.value = null
+  }
+
+  const connectWithAuth = async (auth: Auth, connection: HAConnection) => {
     try {
       connectionError.value = null
-      haConnection.value = connection
-      haApi.value = new HomeAssistantAPI(connection)
-      
-      const connected = await haApi.value.testConnection()
-      if (!connected) {
-        throw new Error('Failed to connect to Home Assistant')
-      }
-      
-      const fetchedEntities = await haApi.value.getStates()
-      entities.value = fetchedEntities
+      closeClient()
+      const client = await HomeAssistantClient.connect(auth)
+      const [states, regs] = await Promise.all([client.getStates(), client.getRegistries()])
+      registries.value = regs
+      entities.value = enrichEntities(states, regs)
+      haConnection.value = { ...connection, url: auth.data.hassUrl }
+      haApi.value = client
       isConnected.value = true
-      
       return true
     } catch (error) {
-      connectionError.value = error instanceof Error ? error.message : 'Connection failed'
+      connectionError.value = describeAuthError(error)
       isConnected.value = false
-      haApi.value = null
+      closeClient()
       return false
+    }
+  }
+
+  /**
+   * Connect with explicit settings. For OAuth without stored tokens this
+   * navigates to the Home Assistant login page (the promise never resolves);
+   * the redirect back is handled by `resumeSession()`.
+   */
+  const connectToHA = async (connection: HAConnection) => {
+    let auth: Auth
+    try {
+      connectionError.value = null
+      auth = await createAuth(connection)
+    } catch (error) {
+      connectionError.value = describeAuthError(error)
+      isConnected.value = false
+      return false
+    }
+    return connectWithAuth(auth, connection)
+  }
+
+  /** True when there is an OAuth callback to finish or saved credentials to auto-connect with. */
+  const hasResumableSession = () => isAuthCallback() || getSavedConnection() !== null
+
+  /** Finish an OAuth redirect, or auto-connect with remembered credentials. */
+  const resumeSession = async () => {
+    if (isConnected.value) return true
+    if (isAuthCallback()) {
+      try {
+        const auth = await completeAuthCallback()
+        const saved = getSavedConnection()
+        return connectWithAuth(auth, {
+          url: auth.data.hassUrl,
+          method: 'oauth',
+          remember: saved?.method === 'oauth'
+        })
+      } catch (error) {
+        connectionError.value = describeAuthError(error)
+        return false
+      }
+    }
+    const saved = getSavedConnection()
+    return saved ? connectToHA(saved) : false
+  }
+
+  /** Close the connection; with `forget` also revoke OAuth tokens and clear saved credentials. */
+  const disconnectFromHA = async (forget = false) => {
+    const auth = haApi.value?.auth
+    closeClient()
+    isConnected.value = false
+    entities.value = []
+    registries.value = null
+    entityScope.value = { ...EMPTY_SCOPE }
+    if (forget) {
+      if (auth?.data.refresh_token) {
+        await auth.revoke().catch(err => console.warn('Token revoke failed:', err))
+      }
+      forgetCredentials()
+      haConnection.value = null
     }
   }
   
@@ -130,7 +237,8 @@ export const useBayesianAnalysis = () => {
     try {
       const results = await orchestrator.analyzeEntities(
         haApi.value!,
-        entities.value,
+        // Only in-scope entities (scope filter on the connection step)
+        scopedEntities.value,
         periods.value,
         selectedEntityIds
       )
@@ -192,9 +300,19 @@ export const useBayesianAnalysis = () => {
     canAnalyze,
     calculator,
     haConnection,
+    haApi,
+    registries,
+    entityScope,
+    scopeOptions,
+    scopedEntities,
+    scopedCandidateCount,
+    setEntityScope,
     cachedHistoricalData,
     entityBuffer, // NEW: Efficient buffer access
     connectToHA,
+    resumeSession,
+    hasResumableSession,
+    disconnectFromHA,
     updatePeriods,
     analyzeEntities,
     updateGeneratedConfig,

@@ -1,5 +1,5 @@
 <template>
-  <n-card title="Entity Priority Scores" v-if="sortedEntities.length > 0">
+  <n-card title="Entity Scope & Priority" v-if="props.entities && props.entities.length > 0">
     <template #header-extra>
       <n-space>
         <n-text depth="3">{{ filteredEntities.length }} of {{ sortedEntities.length }} entities</n-text>
@@ -14,9 +14,58 @@
     </template>
     
     <n-space vertical>
+      <div class="scope-filter">
+        <n-text strong>Limit analysis to</n-text>
+        <div class="scope-grid">
+          <n-select
+            v-if="scopeOptions.floors.length > 0"
+            :value="scopeModel.floors"
+            :options="scopeOptions.floors"
+            multiple
+            filterable
+            clearable
+            placeholder="All floors"
+            @update:value="(v: string[]) => updateScope('floors', v)"
+          />
+          <n-select
+            :value="scopeModel.areas"
+            :options="scopeOptions.areas"
+            multiple
+            filterable
+            clearable
+            placeholder="All areas"
+            @update:value="(v: string[]) => updateScope('areas', v)"
+          />
+          <n-select
+            v-if="scopeOptions.labels.length > 0"
+            :value="scopeModel.labels"
+            :options="scopeOptions.labels"
+            multiple
+            filterable
+            clearable
+            placeholder="All labels"
+            @update:value="(v: string[]) => updateScope('labels', v)"
+          />
+          <n-select
+            :value="scopeModel.domains"
+            :options="scopeOptions.domains"
+            multiple
+            filterable
+            clearable
+            placeholder="All domains"
+            @update:value="(v: string[]) => updateScope('domains', v)"
+          />
+        </div>
+        <n-text depth="3">
+          {{ scopedEntities.length }} of {{ props.entities.length }} entities match;
+          {{ sortedEntities.length }} will be analyzed
+          (disabled, hidden, config/diagnostic and unavailable entities are skipped).
+        </n-text>
+      </div>
+
       <n-input
         v-model:value="searchQuery"
-        placeholder="🔍 Search entities by ID, domain, or state..."
+        placeholder="Search entities by ID, name, area, domain, or state..."
         clearable
         :style="{ maxWidth: '400px' }"
       />
@@ -36,7 +85,7 @@
               <strong>Recent activity:</strong> Recently changed entities score higher
             </n-list-item>
             <n-list-item>
-              <strong>Rich attributes:</strong> Entities with meaningful attributes get bonus points
+              <strong>Metadata:</strong> Entities with a device class or an assigned area get a small bonus
             </n-list-item>
             <n-list-item>
               <strong>Availability:</strong> Unavailable or unknown states reduce scores
@@ -82,14 +131,40 @@ import {
   NDivider,
   NEmpty,
   NInput,
+  NSelect,
+  type SelectOption,
   type DataTableColumns
 } from 'naive-ui'
-import type { HAEntity } from '../types/homeAssistant'
+import type { EntityScope, EntityScopeOptions, HAEntity } from '../types/homeAssistant'
 import { EntityScorer } from '../services/entityScorer'
+import { EMPTY_SCOPE, filterByScope } from '../services/haRegistries'
 
 const props = defineProps<{
   entities: HAEntity[]
+  scope?: EntityScope
+  scopeOptions?: EntityScopeOptions
 }>()
+
+const emit = defineEmits<{
+  'update:scope': [scope: EntityScope]
+}>()
+
+const scopeModel = computed<EntityScope>(() => props.scope ?? EMPTY_SCOPE)
+const scopeOptions = computed<Record<keyof EntityScopeOptions, SelectOption[]>>(() => {
+  const o = props.scopeOptions
+  return {
+    areas: (o?.areas ?? []) as SelectOption[],
+    floors: (o?.floors ?? []) as SelectOption[],
+    labels: (o?.labels ?? []) as SelectOption[],
+    domains: (o?.domains ?? []) as SelectOption[]
+  }
+})
+const updateScope = (key: keyof EntityScope, value: string[] | null) => {
+  emit('update:scope', { ...scopeModel.value, [key]: value ?? [] })
+}
+
+const entityById = computed(() => new Map(props.entities.map(e => [e.entity_id, e])))
+const scopedEntities = computed(() => filterByScope(props.entities ?? [], scopeModel.value))
 
 const showAll = ref(false)
 const searchQuery = ref('')
@@ -97,7 +172,7 @@ const scorer = new EntityScorer()
 
 const sortedEntities = computed(() => {
   if (!props.entities || props.entities.length === 0) return []
-  return scorer.scoreEntities(props.entities)
+  return scorer.scoreEntities(scorer.filterRelevantEntities(scopedEntities.value))
 })
 
 const filteredEntities = computed(() => {
@@ -109,11 +184,14 @@ const filteredEntities = computed(() => {
     const domain = entity.entityId.split('.')[0].toLowerCase()
     const reasons = entity.reasons.join(' ').toLowerCase()
     
-    // Find the actual entity to get its state
-    const haEntity = props.entities.find(e => e.entity_id === entity.entityId)
+    const haEntity = entityById.value.get(entity.entityId)
     const state = haEntity?.state?.toLowerCase() || ''
+    const name = haEntity?.meta?.name?.toLowerCase() || ''
+    const area = haEntity?.meta?.area_name?.toLowerCase() || ''
     
     return entityId.includes(query) || 
+           name.includes(query) ||
+           area.includes(query) ||
            domain.includes(query) || 
            state.includes(query) ||
            reasons.includes(query)
@@ -158,6 +236,20 @@ const columns: DataTableColumns<any> = [
     minWidth: 200
   },
   {
+    title: 'Name',
+    key: 'name',
+    ellipsis: { tooltip: true },
+    minWidth: 160,
+    render: (row) => entityById.value.get(row.entityId)?.meta?.name ?? ''
+  },
+  {
+    title: 'Area',
+    key: 'area',
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => entityById.value.get(row.entityId)?.meta?.area_name ?? ''
+  },
+  {
     title: 'Domain',
     key: 'domain',
     width: 100,
@@ -177,7 +269,7 @@ const columns: DataTableColumns<any> = [
       tooltip: true
     },
     render: (row) => {
-      const haEntity = props.entities.find(e => e.entity_id === row.entityId)
+      const haEntity = entityById.value.get(row.entityId)
       const state = haEntity?.state || 'unknown'
       const truncatedState = state.length > 12 ? state.substring(0, 9) + '...' : state
       return h(NTag, {
@@ -217,6 +309,18 @@ const columns: DataTableColumns<any> = [
 </script>
 
 <style scoped>
+.scope-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
 :deep(.n-data-table) {
   font-size: 0.9em;
 }
