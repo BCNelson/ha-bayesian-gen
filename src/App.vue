@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, defineAsyncComponent } from 'vue'
 import { NConfigProvider, NMessageProvider, NButton, NSpace, NAlert, NText, NList, NListItem, NTag, NTabs, NTabPane, NSpin } from 'naive-ui'
 import { useBayesianAnalysis } from './composables/useBayesianAnalysis'
+import { generateBayesianConfig } from './services/configGenerator'
 // Lazy load components for better performance
 const ConnectionForm = defineAsyncComponent(() => import('./components/ConnectionForm.vue'))
 const EntityScoreDisplay = defineAsyncComponent(() => import('./components/EntityScoreDisplay.vue'))
@@ -22,7 +23,6 @@ const {
   analysisProgress,
   entityStatusMap,
   canAnalyze,
-  calculator,
   haConnection,
   cachedHistoricalData,
   entityBuffer, // NEW: Buffer access
@@ -107,12 +107,11 @@ const handleEntitiesSelected = (selectedEntities: EntityProbability[]) => {
   selectedEntitiesForConfig.value = selectedEntities
   if (selectedEntities.length > 0) {
     // User explicitly selected these entities - use ALL of them, no filtering
-    const config = calculator.generateBayesianConfig(
-      selectedEntities,
-      'Custom Bayesian Sensor',
-      selectedEntities.length,
-      true // skipFiltering = true for user selections
-    )
+    const config = generateBayesianConfig(selectedEntities, 'Custom Bayesian Sensor', {
+      periods: periods.value,
+      maxObservations: selectedEntities.length,
+      skipFiltering: true // user selections are used as-is
+    })
     
     updateGeneratedConfig(config)
   }
