@@ -11,7 +11,7 @@
 <style scoped>
 .entity-analyzing-placeholder {
   padding: 1.5rem;
-  background: #f8f9fa;
+  background: var(--app-surface-muted);
   border-radius: 6px;
 }
 
@@ -25,9 +25,9 @@
   height: 16px;
   background: linear-gradient(
     90deg,
-    #e0e0e0 25%,
-    #f0f0f0 50%,
-    #e0e0e0 75%
+    var(--app-surface-hover) 25%,
+    var(--app-surface-muted) 50%,
+    var(--app-surface-hover) 75%
   );
   background-size: 200% 100%;
   border-radius: 4px;

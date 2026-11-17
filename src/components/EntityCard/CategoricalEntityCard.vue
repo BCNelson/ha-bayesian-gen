@@ -140,7 +140,7 @@ const getDiscriminationClass = (discrimination: number) => {
 
 .states-header span {
   font-weight: 500;
-  color: #212529;
+  color: var(--app-text);
 }
 
 .show-more-btn,
@@ -158,8 +158,8 @@ const getDiscriminationClass = (discrimination: number) => {
 
 .state-card {
   display: flex;
-  background: white;
-  border: 2px solid #dee2e6;
+  background: var(--app-surface);
+  border: 2px solid var(--app-border);
   border-radius: 6px;
   padding: 0.75rem;
   cursor: pointer;
@@ -167,13 +167,13 @@ const getDiscriminationClass = (discrimination: number) => {
 }
 
 .state-card:hover {
-  border-color: #4CAF50;
+  border-color: var(--app-true);
   box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
 }
 
 .state-card.selected {
-  border-color: #4CAF50;
-  background: #e8f5e9;
+  border-color: var(--app-true);
+  background: var(--app-true-soft);
   box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
 }
 
@@ -199,10 +199,10 @@ const getDiscriminationClass = (discrimination: number) => {
 
 .state-value {
   font-weight: 500;
-  color: #212529;
+  color: var(--app-text);
   font-family: monospace;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: var(--app-surface-muted);
+  border: 1px solid var(--app-border);
   padding: 0.2rem 0.4rem;
   border-radius: 3px;
   font-size: 0.85rem;
@@ -215,23 +215,23 @@ const getDiscriminationClass = (discrimination: number) => {
   font-size: 0.8rem;
   padding: 0.2rem 0.4rem;
   border-radius: 3px;
-  background: #e9ecef;
-  border: 1px solid #dee2e6;
+  background: var(--app-surface-hover);
+  border: 1px solid var(--app-border);
 }
 
 .high-discrimination {
-  color: #2e7d32;
-  background: #e8f5e9;
+  color: var(--app-true-strong);
+  background: var(--app-true-soft);
 }
 
 .medium-discrimination {
-  color: #ef6c00;
-  background: #fff3e0;
+  color: var(--app-warning);
+  background: var(--app-warning-soft);
 }
 
 .low-discrimination {
-  color: #d32f2f;
-  background: #ffebee;
+  color: var(--app-false);
+  background: var(--app-false-soft);
 }
 
 .state-probabilities {
@@ -250,14 +250,14 @@ const getDiscriminationClass = (discrimination: number) => {
 .prob-label {
   min-width: 40px;
   font-weight: 500;
-  color: #212529;
+  color: var(--app-text);
 }
 
 .prob-bar-mini {
   flex: 1;
   height: 12px;
-  background: #e9ecef;
-  border: 1px solid #dee2e6;
+  background: var(--app-surface-hover);
+  border: 1px solid var(--app-border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -269,11 +269,11 @@ const getDiscriminationClass = (discrimination: number) => {
 }
 
 .true-fill {
-  background: linear-gradient(90deg, #4CAF50, #66BB6A);
+  background: linear-gradient(90deg, var(--app-true), var(--app-true));
 }
 
 .false-fill {
-  background: linear-gradient(90deg, #f44336, #ef5350);
+  background: linear-gradient(90deg, var(--app-false), var(--app-false));
 }
 
 .prob-text {
@@ -285,7 +285,7 @@ const getDiscriminationClass = (discrimination: number) => {
 .occurrence-text {
   min-width: 50px;
   text-align: right;
-  color: #6c757d;
+  color: var(--app-text-2);
   font-size: 0.75rem;
   font-weight: 500;
 }

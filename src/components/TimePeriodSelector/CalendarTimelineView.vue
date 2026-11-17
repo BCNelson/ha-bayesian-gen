@@ -258,16 +258,16 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .calendar-timeline {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   overflow: visible;
 }
 
 .calendar-controls {
   padding: 1rem;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--app-surface-muted);
+  border-bottom: 1px solid var(--app-border);
 }
 
 .week-navigation {
@@ -278,18 +278,18 @@ onBeforeUnmount(() => {
 }
 
 .nav-btn {
-  background: white;
-  border: 1px solid #d0d7de;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  color: #24292f;
+  color: var(--app-text);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .nav-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-  border-color: #8c959f;
+  background: var(--app-surface-muted);
+  border-color: var(--app-border-strong);
 }
 
 .nav-btn:disabled {
@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
 
 .current-week {
   font-weight: 600;
-  color: #24292f;
+  color: var(--app-text);
   min-width: 220px;
   text-align: center;
 }
@@ -307,18 +307,18 @@ onBeforeUnmount(() => {
 .calendar-grid {
   display: grid;
   grid-template-columns: 60px repeat(7, 1fr);
-  background: white;
+  background: var(--app-surface);
   user-select: none;
 }
 
 .time-axis {
-  background: #f8f9fa;
-  border-right: 1px solid #e0e0e0;
+  background: var(--app-surface-muted);
+  border-right: 1px solid var(--app-border);
 }
 
 .time-axis-header {
   height: 60px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .time-label {
@@ -326,10 +326,10 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   font-size: 0.75rem;
-  color: #656d76;
+  color: var(--app-text-2);
   font-weight: 500;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface-muted);
 }
 
 .selection-preview {
@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
   bottom: 1rem;
   right: 1rem;
   background: rgba(0, 0, 0, 0.8);
-  color: white;
+  color: #fff;
   padding: 0.5rem 1rem;
   border-radius: 6px;
   font-size: 0.875rem;

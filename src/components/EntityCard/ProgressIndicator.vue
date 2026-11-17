@@ -40,7 +40,7 @@ const getStatusLabel = (status: string) => {
 <style scoped>
 
 .entity-progress-bar {
-  background: linear-gradient(90deg, #e3f2fd, #f8f9fa);
+  background: linear-gradient(90deg, var(--app-info-soft), var(--app-surface-muted));
   border-radius: 4px;
   padding: 0.5rem;
   margin-bottom: 0.75rem;
@@ -62,14 +62,14 @@ const getStatusLabel = (status: string) => {
 .mini-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #e0e0e0;
-  border-top: 2px solid #4CAF50;
+  border: 2px solid var(--app-border);
+  border-top: 2px solid var(--app-true);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 
 .mini-spinner.analyzing {
-  border-top-color: #2196F3;
+  border-top-color: var(--app-info);
 }
 
 @keyframes spin {
@@ -79,33 +79,33 @@ const getStatusLabel = (status: string) => {
 
 .progress-status-label {
   font-weight: 500;
-  color: #333;
+  color: var(--app-text);
   font-size: 0.9rem;
 }
 
 .progress-status-message {
-  color: #666;
+  color: var(--app-text-2);
   font-size: 0.8rem;
   font-style: italic;
 }
 
 .status-queued {
-  background: rgba(255, 193, 7, 0.1);
+  background: var(--app-warning-soft);
 }
 
 .status-fetching {
-  background: rgba(33, 150, 243, 0.1);
+  background: var(--app-info-soft);
 }
 
 .status-fetched {
-  background: rgba(76, 175, 80, 0.1);
+  background: var(--app-true-soft);
 }
 
 .status-analyzing {
-  background: rgba(156, 39, 176, 0.1);
+  background: var(--app-accent-soft);
 }
 
 .status-error {
-  background: rgba(244, 67, 54, 0.1);
+  background: var(--app-false-soft);
 }
 </style>

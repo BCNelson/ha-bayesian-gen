@@ -155,7 +155,7 @@ document.addEventListener('mouseup', resetMouseState)
 
 <style scoped>
 .calendar-day {
-  border-right: 1px solid #e0e0e0;
+  border-right: 1px solid var(--app-border);
   position: relative;
 }
 
@@ -173,8 +173,8 @@ document.addEventListener('mouseup', resetMouseState)
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--app-surface-muted);
+  border-bottom: 1px solid var(--app-border);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -183,7 +183,7 @@ document.addEventListener('mouseup', resetMouseState)
 .day-label {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #24292f;
+  color: var(--app-text);
   text-align: center;
 }
 
@@ -193,7 +193,7 @@ document.addEventListener('mouseup', resetMouseState)
 }
 
 .hour-strip {
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--app-border);
   position: relative;
   cursor: crosshair;
   transition: background-color 0.1s;
@@ -218,13 +218,13 @@ document.addEventListener('mouseup', resetMouseState)
 }
 
 .selection-overlay.selection-true {
-  background: #4CAF50;
-  border: 2px solid #2e7d32;
+  background: var(--app-true);
+  border: 2px solid var(--app-true-strong);
 }
 
 .selection-overlay.selection-false {
-  background: #f44336;
-  border: 2px solid #c62828;
+  background: var(--app-false);
+  border: 2px solid var(--app-false-strong);
 }
 
 /* Add subtle hour indicators */
@@ -235,7 +235,7 @@ document.addEventListener('mouseup', resetMouseState)
   left: 0;
   right: 0;
   height: 1px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--app-surface-hover);
 }
 
 /* Quarter-hour guides */

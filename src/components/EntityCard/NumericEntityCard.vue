@@ -100,8 +100,8 @@ const getDiscriminationClass = (discrimination: number) => {
 <style scoped>
 
 .numeric-entity {
-  background: #ffffff;
-  border: 1px solid #dee2e6;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 6px;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -116,8 +116,8 @@ const getDiscriminationClass = (discrimination: number) => {
 }
 
 .numeric-label {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--app-info-soft);
+  color: var(--app-info);
   padding: 0.3rem 0.6rem;
   border-radius: 4px;
   font-size: 0.8rem;
@@ -136,8 +136,8 @@ const getDiscriminationClass = (discrimination: number) => {
 
 .numeric-selection-card {
   display: flex;
-  background: white;
-  border: 2px solid #e0e0e0;
+  background: var(--app-surface);
+  border: 2px solid var(--app-border);
   border-radius: 6px;
   padding: 0.75rem;
   cursor: pointer;
@@ -145,13 +145,13 @@ const getDiscriminationClass = (discrimination: number) => {
 }
 
 .numeric-selection-card:hover {
-  border-color: #4CAF50;
+  border-color: var(--app-true);
   box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
 }
 
 .numeric-selection-card.selected {
-  border-color: #4CAF50;
-  background: #e8f5e9;
+  border-color: var(--app-true);
+  background: var(--app-true-soft);
   box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
 }
 
@@ -170,15 +170,15 @@ const getDiscriminationClass = (discrimination: number) => {
 }
 
 .optimal-thresholds {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: var(--app-surface-muted);
+  border: 1px solid var(--app-border);
   padding: 0.75rem;
   border-radius: 4px;
 }
 
 .thresholds-header {
   font-weight: 600;
-  color: #212529;
+  color: var(--app-text);
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
 }
@@ -197,19 +197,19 @@ const getDiscriminationClass = (discrimination: number) => {
 }
 
 .threshold-item.above {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: var(--app-true-soft);
+  color: var(--app-true-strong);
 }
 
 .threshold-item.below {
-  background: #fff3e0;
-  color: #ef6c00;
+  background: var(--app-warning-soft);
+  color: var(--app-warning);
 }
 
 .threshold-item.none {
-  background: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
+  background: var(--app-surface-muted);
+  color: var(--app-text-2);
+  border: 1px solid var(--app-border);
 }
 
 .numeric-probabilities {
@@ -234,14 +234,14 @@ const getDiscriminationClass = (discrimination: number) => {
   min-width: 80px;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #212529;
+  color: var(--app-text);
 }
 
 .prob-bar-numeric {
   flex: 1;
   height: 20px;
-  background: #e9ecef;
-  border: 1px solid #dee2e6;
+  background: var(--app-surface-hover);
+  border: 1px solid var(--app-border);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -253,11 +253,11 @@ const getDiscriminationClass = (discrimination: number) => {
 }
 
 .true-fill {
-  background: linear-gradient(90deg, #4CAF50, #66BB6A);
+  background: linear-gradient(90deg, var(--app-true), var(--app-true));
 }
 
 .false-fill {
-  background: linear-gradient(90deg, #f44336, #ef5350);
+  background: linear-gradient(90deg, var(--app-false), var(--app-false));
 }
 
 .prob-text-numeric {
@@ -269,24 +269,24 @@ const getDiscriminationClass = (discrimination: number) => {
 
 .prob-summary {
   font-size: 0.8rem;
-  color: #495057;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  color: var(--app-text-2);
+  background: var(--app-surface-muted);
+  border: 1px solid var(--app-border);
   padding: 0.5rem;
   border-radius: 3px;
   text-align: center;
 }
 
 .high-discrimination {
-  color: #2e7d32;
+  color: var(--app-true-strong);
 }
 
 .medium-discrimination {
-  color: #f57c00;
+  color: var(--app-warning);
 }
 
 .low-discrimination {
-  color: #d32f2f;
+  color: var(--app-false);
 }
 
 @media (max-width: 768px) {

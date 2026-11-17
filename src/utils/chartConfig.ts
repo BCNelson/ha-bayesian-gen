@@ -1,3 +1,25 @@
+import { isDarkTheme } from './themeState'
+
+/** Chart palette per theme (kept in sync with the CSS tokens in style.css) */
+const PALETTES = {
+  light: {
+    text: '#4b5157',
+    grid: '#e0e0e6',
+    threshold: '#d03050',
+    thresholdText: '#ffffff',
+    series: ['#18a058', '#8a2be2', '#f0a020', '#ff6b6b', '#4ecdc4', '#45b7d1', '#ffa07a', '#98d8c8', '#f7dc6f', '#bb8fce', '#85c1e2'],
+    seriesWithSensor: ['#18a058', '#8a2be2', '#f0a020', '#ff5722']
+  },
+  dark: {
+    text: 'rgba(255, 255, 255, 0.72)',
+    grid: 'rgba(255, 255, 255, 0.12)',
+    threshold: '#e88080',
+    thresholdText: '#101014',
+    series: ['#63e2b7', '#c39af0', '#f2c97d', '#ff8a8a', '#6fe0d8', '#70c0e8', '#ffb38f', '#a8e6d8', '#f7e08f', '#d0aee0', '#a0d0ef'],
+    seriesWithSensor: ['#63e2b7', '#c39af0', '#f2c97d', '#ff8a65']
+  }
+}
+
 export interface ChartConfig {
   height: number
   threshold: number
@@ -6,8 +28,16 @@ export interface ChartConfig {
 }
 
 export const createBayesianChartOptions = (config: ChartConfig) => {
+  // Reading the reactive flag here makes callers' computeds re-run on theme change
+  const dark = isDarkTheme.value
+  const palette = dark ? PALETTES.dark : PALETTES.light
   const options = {
+  theme: {
+    mode: dark ? 'dark' : 'light'
+  },
   chart: {
+    background: 'transparent',
+    foreColor: palette.text,
     id: 'bayesian-probability',
     type: 'line',
     height: config.height,
@@ -87,14 +117,14 @@ export const createBayesianChartOptions = (config: ChartConfig) => {
     yaxis: [
       {
         y: config.threshold * 100,
-        borderColor: '#D32F2F',
+        borderColor: palette.threshold,
         borderWidth: 2,
         strokeDashArray: 8,
         label: {
-          borderColor: '#D32F2F',
+          borderColor: palette.threshold,
           style: {
-            color: '#fff',
-            background: '#D32F2F',
+            color: palette.thresholdText,
+            background: palette.threshold,
             fontSize: '12px',
             fontWeight: 600
           },
@@ -104,7 +134,7 @@ export const createBayesianChartOptions = (config: ChartConfig) => {
       }
     ]
   },
-  colors: config.showSensorValues ? ['#2E7D32', '#9C27B0', '#FFC107', '#FF5722'] : ['#2E7D32', '#9C27B0', '#FFC107', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'],
+  colors: config.showSensorValues ? palette.seriesWithSensor : palette.series,
   fill: {
     type: 'solid',
     opacity: 0.7
@@ -117,7 +147,7 @@ export const createBayesianChartOptions = (config: ChartConfig) => {
     showForSingleSeries: false
   },
   grid: {
-    borderColor: '#e0e0e0',
+    borderColor: palette.grid,
     strokeDashArray: 1,
     xaxis: {
       lines: {
@@ -131,6 +161,7 @@ export const createBayesianChartOptions = (config: ChartConfig) => {
     }
   },
   tooltip: {
+    theme: dark ? 'dark' : 'light',
     x: {
       format: 'dd MMM HH:mm'
     },

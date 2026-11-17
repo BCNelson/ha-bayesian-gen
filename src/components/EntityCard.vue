@@ -127,8 +127,8 @@ const toggleNumericSelection = () => {
 <style scoped>
 
 .entity-group-card {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.3s;
@@ -143,22 +143,22 @@ const toggleNumericSelection = () => {
 /* Status-specific card styles */
 .entity-group-card.status-queued {
   opacity: 0.6;
-  border-color: #e0e0e0;
+  border-color: var(--app-border);
 }
 
 .entity-group-card.status-fetching {
-  border-color: #2196f3;
+  border-color: var(--app-info);
   box-shadow: 0 0 8px rgba(33, 150, 243, 0.3);
 }
 
 .entity-group-card.status-analyzing {
-  border-color: #9c27b0;
+  border-color: var(--app-accent);
   box-shadow: 0 0 8px rgba(156, 39, 176, 0.3);
 }
 
 .entity-group-card.status-error {
-  border-color: #f44336;
-  background: #ffebee;
+  border-color: var(--app-false);
+  background: var(--app-false-soft);
 }
 
 .entity-group-header {
@@ -166,29 +166,29 @@ const toggleNumericSelection = () => {
   align-items: center;
   justify-content: space-between;
   padding: 1rem;
-  background: #ffffff;
-  border-bottom: 1px solid #dee2e6;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
   gap: 1rem;
   flex-wrap: wrap;
 }
 
 .entity-name {
   font-weight: 500;
-  color: #212529;
+  color: var(--app-text);
   font-family: monospace;
-  background: #f8f9fa;
+  background: var(--app-surface-muted);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 0.9rem;
   flex: 1;
   min-width: 200px;
   word-break: break-all;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--app-border);
 }
 
 .entity-domain {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--app-info-soft);
+  color: var(--app-info);
   padding: 0.3rem 0.6rem;
   border-radius: 4px;
   font-size: 0.8rem;
@@ -204,31 +204,31 @@ const toggleNumericSelection = () => {
 }
 
 .best-discrimination span {
-  color: #495057;
+  color: var(--app-text-2);
   font-weight: 500;
 }
 
 .best-discrimination strong.excellent {
-  color: #2e7d32;
+  color: var(--app-true-strong);
 }
 
 .best-discrimination strong.good {
-  color: #388e3c;
+  color: var(--app-true);
 }
 
 .best-discrimination strong.moderate {
-  color: #f57c00;
+  color: var(--app-warning);
 }
 
 .best-discrimination strong.low {
-  color: #d32f2f;
+  color: var(--app-false);
 }
 
 .low-discrimination-compact {
   padding: 1rem;
   text-align: center;
-  background: #f8f9fa;
-  border-top: 1px solid #dee2e6;
+  background: var(--app-surface-muted);
+  border-top: 1px solid var(--app-border);
 }
 
 .expand-compact-btn {
@@ -238,12 +238,12 @@ const toggleNumericSelection = () => {
 
 .entity-error-content {
   padding: 1rem;
-  background: #ffebee;
-  border-top: 1px solid #ffcdd2;
+  background: var(--app-false-soft);
+  border-top: 1px solid var(--app-false-soft);
 }
 
 .error-message {
-  color: #d32f2f;
+  color: var(--app-false);
   margin: 0;
   font-weight: 500;
   text-align: center;

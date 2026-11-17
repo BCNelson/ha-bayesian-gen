@@ -237,8 +237,8 @@ defineExpose({
 <style scoped>
 
 .timeline-mode {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   margin-bottom: 2rem;
 }
@@ -248,8 +248,8 @@ defineExpose({
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface-muted);
   border-radius: 8px 8px 0 0;
 }
 
@@ -261,7 +261,7 @@ defineExpose({
 
 .current-week {
   font-weight: 500;
-  color: #333;
+  color: var(--app-text);
   min-width: 200px;
   text-align: center;
 }
@@ -271,7 +271,7 @@ defineExpose({
   align-items: center;
   gap: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--app-text);
 }
 
 .timeline-grid {
@@ -287,18 +287,18 @@ defineExpose({
 }
 
 .day-header {
-  background: #f8f9fa;
+  background: var(--app-surface-muted);
   padding: 0.75rem;
   text-align: center;
   font-weight: 500;
-  color: #333;
+  color: var(--app-text);
   border-radius: 4px;
 }
 
 .day-header small {
   display: block;
   font-size: 0.8rem;
-  color: #666;
+  color: var(--app-text-2);
   margin-top: 0.25rem;
 }
 
@@ -316,8 +316,8 @@ defineExpose({
 
 .time-slot {
   padding: 0.25rem;
-  border: 1px solid #e0e0e0;
-  background: white;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -342,24 +342,24 @@ defineExpose({
 }
 
 .time-slot.unmarked:hover {
-  background: #f0f0f0;
+  background: var(--app-surface-muted);
 }
 
 .time-slot.marked-true {
-  background: #e8f5e9;
-  border-color: #4CAF50;
-  color: #2e7d32;
+  background: var(--app-true-soft);
+  border-color: var(--app-true);
+  color: var(--app-true-strong);
 }
 
 .time-slot.marked-false {
-  background: #ffebee;
-  border-color: #f44336;
-  color: #c62828;
+  background: var(--app-false-soft);
+  border-color: var(--app-false);
+  color: var(--app-false-strong);
 }
 
 .time-slot.disabled {
-  background: #f5f5f5;
-  color: #bbb;
+  background: var(--app-surface-muted);
+  color: var(--app-text-3);
   cursor: not-allowed;
 }
 
