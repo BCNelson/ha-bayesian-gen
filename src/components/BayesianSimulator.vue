@@ -92,8 +92,8 @@
         </div>
         <div v-else class="observations-list">
           <div
-            v-for="obs in config.observations"
-            :key="obs.entity_id"
+            v-for="(obs, obsIndex) in config.observations"
+            :key="`${obs.entity_id}-${obsIndex}`"
             class="observation-item"
             :class="{ 'has-data': cachedHistoricalData.has(obs.entity_id) }"
           >
@@ -186,7 +186,7 @@ import { SimulationService } from '../services/simulationService'
 import { createBayesianChartOptions } from '../utils/chartConfig'
 import { formatDate as fmtDate, formatDuration } from '../utils/formatters'
 import type { BayesianSensorConfig, TimePeriod } from '../types/bayesian'
-import type { SimulationSummary } from '../services/cachedBayesianSimulator'
+import type { SimulationSummary } from '../services/bufferBayesianSimulator'
 
 const VueApexCharts = defineAsyncComponent(() => import('vue3-apexcharts'))
 
@@ -278,112 +278,34 @@ const runSimulation = async () => {
     const { start, end } = getTimeRangeFromData()
     const sampleInterval = getSampleInterval()
     
-    // Check if we should use buffer-based or legacy simulation
-    const shouldUseBuffer = props.entityBuffer && typeof props.entityBuffer.getTransferableBuffers === 'function'
-    
-    if (shouldUseBuffer) {
-      console.log('Using high-performance buffer simulation')
-      
-      // NEW: High-performance buffer-based simulation
-      const entityIds = props.config.observations.map(obs => obs.entity_id)
-      
-      // Check if all required entities have buffer data
-      const availableEntities = entityIds.filter(entityId => 
-        props.entityBuffer.hasEntity(entityId)
-      )
-      
-      if (availableEntities.length === 0) {
-        error.value = 'No buffer data available for configured entities. Analysis is still running...'
-        return
-      }
-      
-      // Get transferable buffers (zero-copy transfer)
-      const { buffers, metadata } = props.entityBuffer.getTransferableBuffers(availableEntities)
-      
-      if (buffers.length === 0) {
-        error.value = 'No transferable buffer data available'
-        return
-      }
-      
-      console.log(`Transferring ${buffers.length} buffers to worker`)
-      
-      try {
-        // Run efficient buffer simulation
-        simulationResult.value = await simulationService.simulateWithBuffers(
-          props.config.prior,
-          props.config.probability_threshold,
-          props.config.observations.filter(obs => availableEntities.includes(obs.entity_id)),
-          buffers,
-          metadata,
-          { start, end },
-          sampleInterval
-        )
-      } catch (bufferError) {
-        console.warn('Buffer simulation failed, falling back to legacy:', bufferError)
-        
-        // Fallback to legacy simulation
-        const availableEntities = props.config.observations.filter(obs => 
-          props.cachedHistoricalData.has(obs.entity_id)
-        )
-        
-        if (availableEntities.length === 0) {
-          throw new Error('No historical data available for configured entities')
-        }
-
-        const plainConfig = {
-          prior: props.config.prior,
-          probability_threshold: props.config.probability_threshold,
-          observations: props.config.observations.map(obs => ({...obs}))
-        }
-        
-        const plainCachedData = new Map(props.cachedHistoricalData)
-        
-        simulationResult.value = await simulationService.simulate(
-          plainConfig.prior,
-          plainConfig.probability_threshold,
-          plainConfig.observations,
-          plainCachedData,
-          { start, end },
-          sampleInterval
-        )
-      }
-      
-    } else {
-      console.log('Using legacy object-based simulation')
-      
-      // LEGACY: Object-based simulation (fallback)
-      const availableEntities = props.config.observations.filter(obs => 
-        props.cachedHistoricalData.has(obs.entity_id)
-      )
-      
-      if (availableEntities.length === 0) {
-        error.value = 'No historical data available for configured entities. Analysis is still running...'
-        return
-      }
-
-      // Defer heavy serialization work to next tick to prevent blocking
-      await nextTick()
-      
-      // Serialize reactive objects to plain data before passing to worker
-      const plainConfig = {
-        prior: props.config.prior,
-        probability_threshold: props.config.probability_threshold,
-        observations: props.config.observations.map(obs => ({...obs})) // shallow clone
-      }
-      
-      // Convert Map to plain object (still expensive but better than JSON)
-      const plainCachedData = new Map(props.cachedHistoricalData)
-      
-      // Run legacy simulation
-      simulationResult.value = await simulationService.simulate(
-        plainConfig.prior,
-        plainConfig.probability_threshold,
-        plainConfig.observations,
-        plainCachedData,
-        { start, end },
-        sampleInterval
-      )
+    if (!props.entityBuffer || typeof props.entityBuffer.getTransferableBuffers !== 'function') {
+      error.value = 'No entity data available yet. Analysis is still running...'
+      return
     }
+
+    const entityIds = props.config.observations.map(obs => obs.entity_id)
+    const availableEntities = entityIds.filter(entityId => props.entityBuffer.hasEntity(entityId))
+    if (availableEntities.length === 0) {
+      error.value = 'No buffer data available for configured entities. Analysis is still running...'
+      return
+    }
+
+    // Get transferable buffers (zero-copy transfer)
+    const { buffers, metadata } = props.entityBuffer.getTransferableBuffers(availableEntities)
+    if (buffers.length === 0) {
+      error.value = 'No transferable buffer data available'
+      return
+    }
+
+    simulationResult.value = await simulationService.simulateWithBuffers(
+      props.config.prior,
+      props.config.probability_threshold,
+      props.config.observations.filter(obs => availableEntities.includes(obs.entity_id)),
+      buffers,
+      metadata,
+      { start, end },
+      sampleInterval
+    )
 
     updateChart()
   } catch (err) {

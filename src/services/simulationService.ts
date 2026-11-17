@@ -1,6 +1,6 @@
 import SimulationWorker from '../workers/simulationWorker?worker'
 import type { BayesianObservation } from '../types/bayesian'
-import type { SimulationSummary } from './cachedBayesianSimulator'
+import type { SimulationSummary } from './bufferBayesianSimulator'
 import type { EntityBufferMetadata } from './entityBuffer'
 
 interface SimulationTask {
@@ -52,45 +52,9 @@ export class SimulationService {
     }
   }
 
-  async simulate(
-    prior: number,
-    threshold: number,
-    observations: BayesianObservation[],
-    cachedData: Map<string, any[]>,
-    timeRange: { start: Date; end: Date },
-    sampleIntervalMinutes: number = 5
-  ): Promise<SimulationSummary> {
-    this.ensureWorker()
-    
-    return new Promise((resolve, reject) => {
-      const taskId = `sim_${this.nextTaskId++}`
-      
-      // Convert Map to object for worker transfer
-      const cachedDataObj = Object.fromEntries(cachedData.entries())
-      
-      const task = { id: taskId, resolve, reject }
-      this.activeTasks.set(taskId, task)
-      
-      this.worker!.postMessage({
-        type: 'SIMULATE',
-        id: taskId,
-        data: {
-          prior,
-          threshold,
-          observations,
-          cachedData: cachedDataObj,
-          timeRange: {
-            start: timeRange.start.toISOString(),
-            end: timeRange.end.toISOString()
-          },
-          sampleIntervalMinutes
-        }
-      })
-    })
-  }
-
   /**
-   * NEW: Efficient simulation using pre-compressed buffers
+   * Simulate the sensor over `timeRange` from pre-compressed entity buffers,
+   * using HA's exact posterior algorithm (see services/haBayesian.ts).
    */
   async simulateWithBuffers(
     prior: number,
@@ -156,7 +120,8 @@ export class SimulationService {
         this.worker!.postMessage(finalMessage)
       } catch (error) {
         console.error('Failed to prepare buffer simulation data:', error)
-        throw error
+        this.activeTasks.delete(taskId)
+        reject(error instanceof Error ? error : new Error(String(error)))
       }
     })
   }
@@ -165,6 +130,9 @@ export class SimulationService {
     if (this.worker) {
       this.worker.terminate()
       this.worker = null
+    }
+    for (const task of this.activeTasks.values()) {
+      task.reject(new Error('Simulation service terminated'))
     }
     this.activeTasks.clear()
   }

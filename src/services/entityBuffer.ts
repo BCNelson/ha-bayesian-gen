@@ -52,7 +52,8 @@ export class StreamingEntityBuffer {
   }
 
   /**
-   * Stream data points as they arrive during fetch
+   * Stream data points as they arrive during fetch.
+   * Points must be appended in chronological order.
    */
   appendDataPoint(entityId: string, timestamp: Date, state: string): void {
     const entityBuffer = this.entityBuffers.get(entityId)
@@ -91,14 +92,20 @@ export class StreamingEntityBuffer {
    * Bulk load historical data for an entity
    */
   loadEntityHistory(entityId: string, history: HAHistoryEntry[]): void {
-    if (history.length === 0) return
+    // Simulators binary-search the buffer by time, so it must be sorted.
+    // Entries with unparsable timestamps are dropped; the sort is stable so
+    // the last entry for a given timestamp still wins.
+    const points = history
+      .map(entry => ({ time: new Date(entry.last_changed), state: entry.state }))
+      .filter(p => !Number.isNaN(p.time.getTime()))
+      .sort((a, b) => a.time.getTime() - b.time.getTime())
+    if (points.length === 0) return
 
     // Initialize with exact capacity needed
-    this.initializeEntity(entityId, history.length)
+    this.initializeEntity(entityId, points.length)
 
-    // Stream all data points
-    for (const entry of history) {
-      this.appendDataPoint(entityId, new Date(entry.last_changed), entry.state)
+    for (const p of points) {
+      this.appendDataPoint(entityId, p.time, p.state)
     }
   }
 

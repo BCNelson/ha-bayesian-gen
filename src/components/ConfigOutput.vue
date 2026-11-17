@@ -166,6 +166,7 @@ import {
   useMessage
 } from 'naive-ui'
 import BayesianSimulator from './BayesianSimulator.vue'
+import { limitObservationsByEntity } from '../services/configGenerator'
 import type { BayesianSensorConfig, EntityProbability } from '../types/bayesian'
 
 const props = defineProps<{
@@ -206,7 +207,7 @@ const currentConfig = computed(() => {
     name: sensorName.value,
     prior: prior.value,
     probability_threshold: threshold.value,
-    observations: props.config.observations.slice(0, maxObservations.value)
+    observations: limitObservationsByEntity(props.config.observations, maxObservations.value)
   }
 })
 

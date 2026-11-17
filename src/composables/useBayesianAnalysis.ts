@@ -10,7 +10,7 @@ import {
   isAuthCallback
 } from '../services/haAuth'
 import { EMPTY_SCOPE, entityDomain, enrichEntities, filterByScope } from '../services/haRegistries'
-import { BayesianCalculator } from '../services/bayesianCalculator'
+import { generateBayesianConfig, informationScore } from '../services/configGenerator'
 import { AnalysisOrchestrator } from '../services/analysisOrchestrator'
 import { StreamingEntityBuffer } from '../services/entityBuffer'
 import { EntityScorer } from '../services/entityScorer'
@@ -75,7 +75,6 @@ export const useBayesianAnalysis = () => {
   const entityStatusMap = shallowRef<Map<string, { status: 'queued' | 'fetching' | 'fetched' | 'analyzing' | 'completed' | 'error', message?: string }>>(new Map())
   const entityScores = shallowRef<Map<string, { score: number, reasons: string[] }>>(new Map())
   
-  const calculator = new BayesianCalculator()
   const orchestrator = new AnalysisOrchestrator()
   
   // Set up orchestrator callbacks
@@ -92,7 +91,7 @@ export const useBayesianAnalysis = () => {
     onResult: (newResults) => {
       // Add new results immediately and sort - create new array reference for shallow reactivity
       const currentResults = [...analyzedEntities.value, ...newResults]
-      currentResults.sort((a, b) => b.discriminationPower - a.discriminationPower)
+      currentResults.sort((a, b) => informationScore(b) - informationScore(a))
       analyzedEntities.value = currentResults
     },
     onEntityFetched: (entityId, history) => {
@@ -243,20 +242,12 @@ export const useBayesianAnalysis = () => {
         selectedEntityIds
       )
       
-      // Cache historical data for simulation
-      results.forEach(result => {
-        if (!cachedHistoricalData.value.has(result.entityId)) {
-          cachedHistoricalData.value.set(result.entityId, [])
-        }
-      })
-      
       // Generate final config
       if (results.length > 0) {
-        const config = calculator.generateBayesianConfig(
-          results.slice(0, 10),
-          'Bayesian Sensor',
-          10
-        )
+        const config = generateBayesianConfig(results, 'Bayesian Sensor', {
+          periods: periods.value,
+          maxObservations: 10
+        })
         
         generatedConfig.value = config
       }
@@ -298,7 +289,6 @@ export const useBayesianAnalysis = () => {
     entityStatusMap,
     entityScores,
     canAnalyze,
-    calculator,
     haConnection,
     haApi,
     registries,

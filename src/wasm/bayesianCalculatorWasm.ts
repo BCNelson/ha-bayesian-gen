@@ -9,14 +9,20 @@ import type {
 let wasmModule: any = null
 let BayesianCalculator: any = null
 
-export async function initWasm(): Promise<void> {
+/**
+ * Load the WASM engine. `moduleOrPath` is forwarded to wasm-bindgen's init
+ * (e.g. the raw .wasm bytes in Node tests); in the browser it is omitted and
+ * the module is fetched next to the JS glue.
+ */
+export async function initWasm(moduleOrPath?: unknown): Promise<void> {
   if (wasmModule) return
 
   // Dynamic import for WASM module
-  wasmModule = await import('./pkg/bayesian_calculator.js')
-  await wasmModule.default()
-  
-  BayesianCalculator = wasmModule.BayesianCalculator
+  const mod = await import('./pkg/bayesian_calculator.js')
+  await mod.default(moduleOrPath === undefined ? undefined : { module_or_path: moduleOrPath as any })
+
+  BayesianCalculator = mod.BayesianCalculator
+  wasmModule = mod
 }
 
 export class WasmBayesianCalculator {
@@ -29,9 +35,14 @@ export class WasmBayesianCalculator {
     this.calculator = new BayesianCalculator()
   }
 
+  /**
+   * Analyse entity histories against the labelled periods. Results are sorted
+   * by `informationScore` (descending). `periods` may carry Date or ISO-string
+   * bounds.
+   */
   calculateEntityProbabilities(
     history: HAHistoryResponse,
-    periods: TimePeriod[]
+    periods: Array<Omit<TimePeriod, 'start' | 'end'> & { start: Date | string; end: Date | string }>
   ): EntityProbability[] {
     try {
       // Convert TypeScript types to WASM expected format
