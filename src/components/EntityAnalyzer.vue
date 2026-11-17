@@ -160,6 +160,7 @@ import {
 import type { EntityProbability, TimePeriod } from '../types/bayesian'
 import EntityCard from './EntityCard.vue'
 import { STORAGE_KEYS, readJSON, writeJSON, selectionKey } from '../utils/sessionStore'
+import { informationScore } from '../services/configGenerator'
 
 const props = defineProps<{
   analyzedEntities: EntityProbability[]
@@ -199,11 +200,13 @@ const getStatusType = (status: string) => {
 }
 
 const groupedEntities = computed(() => {
-  // Use a regular Map for better performance in computed
+  // Group the engine's results per entity. Probabilities come straight from the
+  // WASM engine (which matches HA's semantics); no recalculation here.
   const groups = new Map<string, {
     entityId: string
     states: EntityProbability[]
     bestDiscrimination: number
+    bestScore: number
     isNumeric: boolean
     numericThresholds?: { above?: number; below?: number }
     correctedProbabilities?: { probGivenTrue: number; probGivenFalse: number; discriminationPower: number }
@@ -212,97 +215,36 @@ const groupedEntities = computed(() => {
   for (const entity of props.analyzedEntities) {
     if (!groups.has(entity.entityId)) {
       const isNumeric = entity.numericStats?.isNumeric || false
-      const numericThresholds = entity.optimalThresholds || undefined
-      
       groups.set(entity.entityId, {
         entityId: entity.entityId,
         states: [],
         bestDiscrimination: 0,
+        bestScore: 0,
         isNumeric,
-        numericThresholds,
-        correctedProbabilities: isNumeric && numericThresholds ? 
-          calculateThresholdBasedProbabilities(entity, numericThresholds) : undefined
+        numericThresholds: entity.optimalThresholds || undefined,
+        correctedProbabilities: isNumeric
+          ? {
+              probGivenTrue: entity.probGivenTrue,
+              probGivenFalse: entity.probGivenFalse,
+              discriminationPower: entity.discriminationPower
+            }
+          : undefined
       })
     }
-    
+
     const group = groups.get(entity.entityId)!
     group.states.push(entity)
     group.bestDiscrimination = Math.max(group.bestDiscrimination, entity.discriminationPower)
+    group.bestScore = Math.max(group.bestScore, informationScore(entity))
   }
 
   for (const group of groups.values()) {
-    if (group.isNumeric) {
-      group.states = [group.states.reduce((best, current) => 
-        current.discriminationPower > best.discriminationPower ? current : best
-      )]
-      
-      if (group.correctedProbabilities) {
-        group.bestDiscrimination = group.correctedProbabilities.discriminationPower
-      }
-    } else {
-      group.states.sort((a, b) => b.discriminationPower - a.discriminationPower)
-    }
+    group.states.sort((a, b) => informationScore(b) - informationScore(a))
+    if (group.isNumeric) group.states = group.states.slice(0, 1)
   }
 
   return Array.from(groups.values())
 })
-
-const calculateThresholdBasedProbabilities = (
-  entity: EntityProbability, 
-  thresholds: { above?: number; below?: number }
-): { probGivenTrue: number; probGivenFalse: number; discriminationPower: number } => {
-  if (!entity.numericStats?.isNumeric || !entity.numericStats.trueChunks || !entity.numericStats.falseChunks) {
-    return { probGivenTrue: 0.5, probGivenFalse: 0.5, discriminationPower: 0 }
-  }
-
-  const { trueChunks, falseChunks } = entity.numericStats
-  
-  
-  let trueMatchingDuration = 0
-  let trueTotalDuration = 0
-  
-  for (const chunk of trueChunks) {
-    trueTotalDuration += chunk.duration
-    
-    const matches = chunkMatchesThreshold(chunk.value, thresholds.above, thresholds.below)
-    if (matches) {
-      trueMatchingDuration += chunk.duration
-    }
-  }
-  
-  let falseMatchingDuration = 0
-  let falseTotalDuration = 0
-  
-  for (const chunk of falseChunks) {
-    falseTotalDuration += chunk.duration
-    
-    const matches = chunkMatchesThreshold(chunk.value, thresholds.above, thresholds.below)
-    if (matches) {
-      falseMatchingDuration += chunk.duration
-    }
-  }
-
-  const probGivenTrue = trueTotalDuration > 0 ? trueMatchingDuration / trueTotalDuration : 0
-  const probGivenFalse = falseTotalDuration > 0 ? falseMatchingDuration / falseTotalDuration : 0
-  const discriminationPower = Math.abs(probGivenTrue - probGivenFalse)
-
-  return {
-    probGivenTrue: Math.min(0.99, Math.max(0.01, probGivenTrue)),
-    probGivenFalse: Math.min(0.99, Math.max(0.01, probGivenFalse)),
-    discriminationPower
-  }
-}
-
-const chunkMatchesThreshold = (value: number, above?: number, below?: number): boolean => {
-  if (above !== undefined && below !== undefined) {
-    return value > above && value <= below
-  } else if (above !== undefined) {
-    return value > above
-  } else if (below !== undefined) {
-    return value <= below
-  }
-  return false
-}
 
 const filteredEntities = computed(() => {
   return groupedEntities.value.filter(group => {
@@ -313,7 +255,7 @@ const filteredEntities = computed(() => {
     const matchesDiscrimination = group.bestDiscrimination >= Number(minDiscrimination.value)
     
     return matchesSearch && matchesDiscrimination
-  }).sort((a, b) => b.bestDiscrimination - a.bestDiscrimination)
+  }).sort((a, b) => b.bestScore - a.bestScore)
 })
 
 // Separate pending entities that haven't been analyzed yet
@@ -353,10 +295,10 @@ const setSelection = (entities: EntityProbability[]) => {
   emit('entitiesSelected', entities)
 }
 
-const topByDiscrimination = (count: number) =>
+const topByScore = (count: number) =>
   props.analyzedEntities
     .slice()
-    .sort((a, b) => b.discriminationPower - a.discriminationPower)
+    .sort((a, b) => informationScore(b) - informationScore(a))
     .slice(0, count)
 
 /**
@@ -375,7 +317,7 @@ watch(() => props.isAnalyzing, (isAnalyzing, wasAnalyzing) => {
     .map(k => byKey.get(k))
     .filter((e): e is EntityProbability => !!e)
 
-  setSelection(resolved.length > 0 ? resolved : topByDiscrimination(10))
+  setSelection(resolved.length > 0 ? resolved : topByScore(10))
 })
 
 const toggleEntitySelection = (entity: EntityProbability) => {
@@ -390,7 +332,7 @@ const selectTop = (count: number) => {
   setSelection(
     filteredEntities.value
       .flatMap(group => group.states)
-      .sort((a, b) => b.discriminationPower - a.discriminationPower)
+      .sort((a, b) => informationScore(b) - informationScore(a))
       .slice(0, count)
   )
 }

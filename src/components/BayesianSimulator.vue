@@ -117,13 +117,13 @@
               <div class="condition">
                 <span v-if="obs.to_state">State: {{ obs.to_state }}</span>
                 <span v-else-if="obs.above !== undefined && obs.below !== undefined">
-                  {{ obs.above }} &lt; value &lt; {{ obs.below }}
+                  {{ obs.above }} &lt; value {{ belowOp(obs) }} {{ obs.below }}
                 </span>
                 <span v-else-if="obs.above !== undefined">
                   value &gt; {{ obs.above }}
                 </span>
                 <span v-else-if="obs.below !== undefined">
-                  value &lt; {{ obs.below }}
+                  value {{ belowOp(obs) }} {{ obs.below }}
                 </span>
               </div>
               
@@ -478,6 +478,11 @@ onMounted(() => {
     runSimulation()
   }
 })
+
+// HA treats several numeric_state observations on one entity as ranges where
+// `below` is inclusive; a lone numeric_state observation has an exclusive `below`.
+const belowOp = (obs: { entity_id: string; platform: string }) =>
+  props.config.observations.filter(o => o.entity_id === obs.entity_id).length > 1 ? '≤' : '<'
 </script>
 
 <style scoped>
